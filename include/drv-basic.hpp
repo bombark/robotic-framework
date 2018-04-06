@@ -9,8 +9,8 @@ struct VetStr : Vet {
 	std::vector<string> data;
 
 	VetStr(){
-		ctx.api.to_str  = ctx_to_str;
-		ctx.api.stat    = ctx_stat;
+		api.to_str  = ctx_to_str;
+		api.stat    = ctx_stat;
 	}
 
 	void putNat(uint64_t val){
@@ -37,7 +37,7 @@ struct VetStr : Vet {
 	}
 
 	virtual void putColl(Coll* coll){
-		if ( coll->stat.isVet() ){
+		/*if ( coll->stat.isVet() ){
 			String val = this->ctx.api.serialize(coll);
 			this->data.push_back(val);
 			this->stats.push_back( Stat().setVet() );
@@ -45,7 +45,7 @@ struct VetStr : Vet {
 			String val = this->ctx.api.serialize(coll);
 			this->data.push_back(val);
 			this->stats.push_back( Stat().setMap() );
-		}
+		}*/
 	}
 
 	// virtuals functions
@@ -79,15 +79,15 @@ struct MapStrIt : VetFixed {
 	void buildCtx(Ctx& ctx){
 		Coll::buildCtx(ctx);
 		ctx.coll = this;
-		ctx.api.to_str = ctx_to_str;
+		//ctx.api->to_str = ctx_to_str;
 	}
 
 	Cursor buildCursor(){
 		Cursor cur;
-		cur.ctx.coll = this;
+		/*cur.ctx.coll = this;
 		cur.ctx.api.seek_int = cursor_seek_int;
 		cur.ctx.api.to_coll  = cursor_to_coll;
-		cur.ctx.api.stat     = cursor_stat;
+		cur.ctx.api.stat     = cursor_stat;*/
 		return cur;
 	}
 
@@ -140,9 +140,9 @@ struct MapStr : Map {
 	std::map<String,String> data;
 
 	MapStr(){
-		ctx.api.stat    = ctx_stat;
-		ctx.api.to_str  = ctx_to_str;
-		ctx.api.set_str = ctx_set_str;
+		api.stat    = ctx_stat;
+		api.to_str  = ctx_to_str;
+		api.set_str = ctx_set_str;
 	}
 
 	Cursor begin(){

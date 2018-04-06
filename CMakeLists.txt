@@ -4,6 +4,9 @@ project (urf)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 
+add_library(drv-basic SHARED "src/drv-basic.cpp")
+target_link_libraries(drv-basic )
+
 
 add_executable(teste "src/main.cpp")
 target_link_libraries(teste yaml-cpp)

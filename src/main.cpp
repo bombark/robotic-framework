@@ -1,6 +1,6 @@
 #include "core.hpp"
 #include "drv-basic.hpp"
-#include "drv-filesystem.hpp"
+//#include "drv-filesystem.hpp"
 
 #include <iostream>
 #include <stdio.h>
@@ -10,6 +10,30 @@
 using namespace std;
 
 
+
+
+
+
+struct FsCursor : Cursor {
+	DIR*   dir;
+	VetStr row;
+
+	FsCursor(){
+		this->dir = opendir("./");
+	}
+
+	MapPtr rowMap(){
+	}
+
+	VetPtr rowVet(){
+		return row.toVet();
+	}
+
+};
+
+
+
+/*
 struct CursorDrv {
 	DIR* dir;
 	CollPtr ptr;
@@ -138,15 +162,26 @@ struct MapYaml : Map {
 	YAML::Node find( String url ){
 
 	}
-};
+};*/
 
 
 
 
 
 int main(){
-//	VetStr vet;
-	//vet << "opa1" << "opa2" << "opa3";
+	VetStr vet;
+	vet << "opa1" << "opa2" << "opa3";
+	cout << vet.size() << endl;
+
+	VetPtr vetptr = &vet;
+	if ( vetptr.isVet() ){
+		cout << "vet\n";
+	} else {
+		cout << "map\n";
+	}
+
+	cout << vetptr[2].toStr() << endl;
+
 	//cout << vet[1].size() << endl;
 
 
@@ -156,9 +191,6 @@ int main(){
 	//vet[0];// = "ddd";
 	//cout << vetptr << endl;
 
-	MapYaml yml;
-	MapPtr map;// = &yml;
-	map["person"]["name"]["aaa"];
 
 	//MapPtr posts = yml["posts"].toColl();
 	//cout << posts["name"].toStr() << endl;
