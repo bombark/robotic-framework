@@ -26,7 +26,7 @@ struct FsCursor : Cursor {
 	}
 
 	VetPtr rowVet(){
-		return row.toVet();
+		//return row.toVet();
 	}
 
 };
@@ -173,14 +173,20 @@ int main(){
 	vet << "opa1" << "opa2" << "opa3";
 	cout << vet.size() << endl;
 
+
+
 	VetPtr vetptr = &vet;
-	if ( vetptr.isVet() ){
-		cout << "vet\n";
-	} else {
-		cout << "map\n";
+	for (int i=0; i<vetptr.size(); i++){
+		VetItem item = vetptr[i];
+		if ( item.isStr() ){
+			cout << item.toStr() << endl;
+		} else if ( item.isColl() ){
+			
+		}
 	}
 
-	cout << vetptr[2].toStr() << endl;
+
+	//cout << vetptr[2].toStr() << endl;
 
 	//cout << vet[1].size() << endl;
 

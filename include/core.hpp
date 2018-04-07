@@ -172,9 +172,10 @@ struct Ctx {
 		return this->api->serialize(this->coll);
 	}
 
-	inline Stat   stat();
-	//inline Stat   stat(){this->api->stat(this);}
-	inline size_t size(){return 0;}
+	//inline Stat   stat();
+	inline Stat   stat(){this->api->stat(this);}
+	inline size_t size();
+
 
 	// Friend Function
 	friend std::ostream& operator<<(std::ostream& out, Ctx& ctx){
@@ -190,11 +191,11 @@ struct CollPtr : Ctx {
 };
 
 
-struct VetCtx1 : Ctx {
-	VetCtx1( Ctx& ctx ) : Ctx(ctx){}
+struct VetItem : Ctx {
+	VetItem( Ctx& ctx ) : Ctx(ctx){}
 
-	inline VetCtx1& operator[](size_t val){this->seekNat(val); return *this;}
-	inline VetCtx1& operator[](String val){this->seekStr(val); return *this;}
+	inline VetItem& operator[](size_t val){this->seekNat(val); return *this;}
+	inline VetItem& operator[](String val){this->seekStr(val); return *this;}
 
 	inline size_t size(){return 0;}
 
@@ -218,7 +219,7 @@ struct VetPtr : CollPtr {
 		this->root_i = 0;
 		cout << "opa\n";
 	}
-	VetPtr(const VetCtx1& ctx) {
+	VetPtr(const VetItem& ctx) {
 		this->root_i = 0;
 		cout << "aqui\n";
 	}
@@ -228,6 +229,7 @@ struct VetPtr : CollPtr {
 		cout << "eee\n";
 	}
 
+	inline Stat stat();
 
 	inline void prev(){this->seekInt(-1);}
 	inline void next(){this->seekInt(+1);}
@@ -253,12 +255,12 @@ struct VetPtr : CollPtr {
 		return *this;
 	}
 
-	inline VetCtx1 operator[](size_t val){
-		VetCtx1 res(*this);
+	inline VetItem operator[](size_t val){
+		VetItem res(*this);
 		res.seekNat(val);
 		return res;
 	}
-	inline VetCtx1 operator[](String val){
+	inline VetItem operator[](String val){
 		//this->seekStr(val);
 		//return *((VetCtx1*) this);
 	 }
@@ -275,8 +277,8 @@ struct VetIt : Ctx {
 };
 
 
-struct MapCtx1 : Ctx {
-	inline MapCtx1& operator[](String idx){
+struct MapItem : Ctx {
+	inline MapItem& operator[](String idx){
 cout << "1:" << idx << endl;
 		//this->seekStr(idx);
 		return *this;
@@ -298,21 +300,19 @@ cout << "1:" << idx << endl;
 	inline void operator=(String val){this->setStr(val);}
 };
 
-struct MapCtx0 : Ctx {
-	MapCtx0(){}
+struct MapPtr : Ctx {
+	MapPtr(){}
 
-	MapCtx0(const Ctx& ctx) : Ctx(ctx){
+	MapPtr(const Ctx& ctx) : Ctx(ctx){
 
 	}
 
-	inline MapCtx1& operator[](String idx){
+	inline MapItem& operator[](String idx){
 		//this->seekStr(idx);
 cout << "0:" << idx << endl;
-		return *((MapCtx1*)this);
+		return *((MapItem*)this);
 	}
 };
-
-typedef MapCtx0 MapPtr;
 
 
 
@@ -483,9 +483,9 @@ inline Ctx::Ctx(Coll* coll){
 	coll->buildCtx(*this);
 }
 
-inline bool Ctx::isRootVet(){this->coll->stat.isVet();}
-inline bool Ctx::isRootMap(){this->coll->stat.isMap();}
-inline Stat Ctx::stat(){return this->coll->stat;}
+inline bool   Ctx::isRootVet(){this->coll->stat.isVet();}
+inline bool   Ctx::isRootMap(){this->coll->stat.isMap();}
+inline size_t Ctx::size(){return this->coll->size();}
 
 /*inline Ctx& Ctx::putNat(uint64_t val){this->coll->putNat(val);return *this;}
 inline Ctx& Ctx::putInt(int64_t  val){this->coll->putInt(val);return *this;}
@@ -493,6 +493,10 @@ inline Ctx& Ctx::putFlt(double   val){this->coll->putFlt(val);return *this;}
 inline Ctx& Ctx::putStr(String   val){this->coll->putStr(val);return *this;}*/
 
 //inline size_t Ctx::size(){return this->coll->size();}
+
+
+inline Stat VetPtr::stat(){return this->coll->stat;}
+
 
 /*----------------------------------------------------------------------------*/
 
@@ -511,7 +515,7 @@ struct Vet : Coll {
 		this->api.seek_str = ctx_seek_str;
 	}
 
-	inline VetCtx1& operator[](size_t val){
+	inline VetItem& operator[](size_t val){
 		//this->ctx.seekNat(val);
 		//return (VetCtx1&) this->ctx;
 	}
@@ -566,7 +570,7 @@ struct Map : Coll {
 	void putStr(String   val){}
 	void putColl(Coll* coll){}
 
-	inline MapCtx1& operator[](String val){
+	inline MapItem& operator[](String val){
 		//this->ctx.seekStr(val);
 		//return (MapCtx1&) this->ctx;
 	}
