@@ -8,5 +8,5 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 #target_link_libraries(drv-basic )
 
 
-add_executable(teste "src/main.cpp")
+add_executable(teste "src/main3.cpp")
 target_link_libraries(teste yaml-cpp)
