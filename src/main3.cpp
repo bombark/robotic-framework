@@ -141,12 +141,12 @@ struct Node {
 
 
 struct Unit {
-	// Basic
+	// Unit - Basic
 	virtual Stat     stat()=0;
 	virtual uint64_t size()=0;
 	virtual void     clear()=0;
 
-	// Item
+	// Unit - Item
 	virtual uint64_t toNat  ()=0;
 	virtual int64_t  toInt  ()=0;
 	virtual double   toFlt  ()=0;
@@ -158,10 +158,11 @@ struct Unit {
 
 	virtual Node     open_item(bool only_read=false){} // end2begin, seeklast
 
-	// Map e Vector
+	// Unit - Map e Vector
 	virtual Node     begin(){}
+	//virtual Node     select(String fields){}
 
-	// Stream
+	// Unit - Stream
 	virtual size_t   row_get_id(){}
 	virtual void     row_next(){}
 	virtual void     row_prev(){}
@@ -172,11 +173,11 @@ struct Unit {
 	virtual void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){}
 	virtual void     node_make (Node& node, Stat type)=0;
 
-	// Node is a Item
-	virtual uint64_t node_to_nat (Node& node)=0;
-	virtual int64_t  node_to_int (Node& node)=0;
-	virtual double   node_to_flt (Node& node)=0;
-	virtual String   node_to_str (Node& node)=0;
+	// Collection, where Node is a Item
+	virtual uint64_t node_to_nat (Node& node, uint64_t notdef)=0;
+	virtual int64_t  node_to_int (Node& node, int64_t  notdef)=0;
+	virtual double   node_to_flt (Node& node, double   notdef)=0;
+	virtual String   node_to_str (Node& node, String   notdef)=0;
 	virtual void     node_put_nat (Node& node, uint64_t val)=0;
 	virtual void     node_put_int (Node& node, uint64_t val)=0;
 	virtual void     node_put_flt (Node& node, double   val)=0;
