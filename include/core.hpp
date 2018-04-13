@@ -1,18 +1,14 @@
 /*============================================================================*/
 
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include <dirent.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <vector>
 #include <map>
 
-using namespace std;
+#include <iostream>
 
 typedef std::string String;
+
+using namespace std;
 
 /*----------------------------------------------------------------------------*/
 
@@ -61,411 +57,176 @@ struct Stat {
 /*----------------------------------------------------------------------------*/
 
 
+
 /*============================================================================*/
 
-struct Coll;
-struct Ctx;
+struct Unit;
 
-struct Api {
-	void   (*set_nat)(Ctx* ctx, uint64_t val);
-	void   (*set_int)(Ctx* ctx, int64_t  val);
-	void   (*set_flt)(Ctx* ctx, double   val);
-	void   (*set_str)(Ctx* ctx, String   val);
+struct Node {
+	Unit*   unit;
+	int     level;
+	int64_t idx_i;
+	String  idx_s;
 
-	uint64_t (*to_nat)(Ctx* ctx);
-	int64_t  (*to_int)(Ctx* ctx);
-	double   (*to_flt)(Ctx* ctx);
-	String   (*to_str)(Ctx* ctx);
-	Ctx      (*to_coll)(Ctx* ctx);
+	Node(){}
 
-	Stat   (*stat)(Ctx* ctx);
-	void   (*end)(Ctx* ctx);
-
-	void   (*seek_nat)(Ctx* ctx, uint64_t idx);
-	void   (*seek_int)(Ctx* ctx, int64_t  idx);
-	void   (*seek_str)(Ctx* ctx, String   idx);
-
-	String (*serialize)(Coll* coll);
-
-	Ctx    (*mkmap)(Ctx* ctx);
-	Ctx    (*subopen)(Ctx* ctx);
-};
-
-
-
-struct Ctx {
-	Coll* coll;
-	void* data;
-	Api*  api;
-
-	size_t root_i;
-	size_t path_i;
-	size_t idx_i;
-	string root_s;
-	string path_s;
-	string idx_s;
-
-	Ctx(){
-		this->root_i = 0;
-		this->idx_i  = 0;
+	Node(Unit* unit, uint64_t idx=0){
+		this->unit  = unit;
+		this->level = 0;
+		this->idx_i = idx;
 	}
 
-	Ctx(const Ctx& ctx){
-		this->coll   = ctx.coll;
-		this->api    = ctx.api;
-		this->data   = ctx.data;
-		this->root_i = ctx.root_i;
-		this->idx_i  = 0;
-		this->root_s = ctx.root_s;
+	Node(Unit* unit, String idx){
+		this->unit  = unit;
+		this->level = 0;
+		this->idx_i = 0;
+		this->idx_s = idx;
 	}
 
-	Ctx(Coll* ctx);
-
-	inline Ctx& end(){this->api->end(this);return *this;}
-
-	inline void seekNat(uint64_t val){
-		this->path_i = val;
-		this->api->seek_nat(this,val);
-	}
-	inline void seekInt(int64_t  val){this->api->seek_int(this,val);}
-	inline void seekStr(String   val){this->api->seek_str(this,val);}
-
-
-	inline void setNat(uint64_t val){this->api->set_nat(this,val);}
-	inline void setInt(int64_t val){this->api->set_int(this,val);}
-	inline void setFlt(double val){this->api->set_flt(this,val);}
-	inline void setStr(String val){this->api->set_str(this,val);}
-
-
-	inline Ctx  mkmap(){return this->api->mkmap(this);}
-
-
-
-	inline uint64_t toNat(){return this->api->to_nat(this);}
-	inline int64_t  toInt(){return this->api->to_int(this);}
-	inline double   toFlt(){return this->api->to_flt(this);}
-	inline String   toStr(){
-		return this->api->to_str(this);
-	}
-	inline Ctx      toColl(){return this->api->to_coll(this);}
-
-
-	inline bool isRootVet();
-	inline bool isRootMap();
-
-
-	inline bool isNull(){this->stat().isNull();}
-
-	inline bool isItem(){this->stat().isItem();}
-	inline bool isNat(){this->stat().isNat();}
-	inline bool isInt(){this->stat().isInt();}
-	inline bool isFlt(){this->stat().isFlt();}
-	inline bool isStr(){this->stat().isStr();}
-
-	inline bool isColl(){this->stat().isColl();}
-	inline bool isVet(){this->stat().isVet();}
-	inline bool isMap(){this->stat().isMap();}
-
-
-
-	inline String serialize(){
-		return this->api->serialize(this->coll);
-	}
-
-	//inline Stat   stat();
-	inline Stat   stat(){this->api->stat(this);}
+	inline Stat   stat();
 	inline size_t size();
+	inline Node   open();
 
+	inline bool   isNull(){this->stat().isNull();}
+	inline bool   isItem(){this->stat().isItem();}
+	inline bool   isColl(){this->stat().isColl();}
 
-	// Friend Function
-	friend std::ostream& operator<<(std::ostream& out, Ctx& ctx){
-		out << ctx.serialize();
-		return out;
-	}
-};
+	inline String toStr();
 
+	inline Node   mkmap();
+	inline Node   mkvet();
 
-struct CollPtr : Ctx {
-	CollPtr() : Ctx(){}
-	CollPtr(Coll* coll) : Ctx(coll){}
-};
+	inline void   set(String val);
 
 
-struct VetItem : Ctx {
-	VetItem( Ctx& ctx ) : Ctx(ctx){}
+	inline Node operator[](int val);
+	inline Node operator[](String val);
 
-	inline VetItem& operator[](size_t val){this->seekNat(val); return *this;}
-	inline VetItem& operator[](String val){this->seekStr(val); return *this;}
-
-	inline size_t size(){return 0;}
-
-	inline void operator=(uint8_t  val){this->setNat(val);}
-	inline void operator=(uint16_t val){this->setNat(val);}
-	inline void operator=(uint32_t val){this->setNat(val);}
-	inline void operator=(uint64_t val){this->setNat(val);}
-	inline void operator=(int8_t  val){this->setInt(val);}
-	inline void operator=(int16_t val){this->setInt(val);}
-	inline void operator=(int32_t val){this->setInt(val);}
-	inline void operator=(int64_t val){this->setInt(val);}
-	inline void operator=(float val){this->setFlt(val);}
-	inline void operator=(double val){this->setFlt(val);}
-	inline void operator=(String val){this->setStr(val);}
-};
-
-
-struct VetPtr : CollPtr {
-	VetPtr() : CollPtr() {}
-	VetPtr(const Ctx& ctx){
-		this->root_i = 0;
-		cout << "opa\n";
-	}
-	VetPtr(const VetItem& ctx) {
-		this->root_i = 0;
-		cout << "aqui\n";
-	}
-
-	VetPtr(Coll* coll) : CollPtr(coll){
-		this->root_i = 0;
-		cout << "eee\n";
-	}
-
-	inline Stat stat();
-
-	inline void prev(){this->seekInt(-1);}
-	inline void next(){this->seekInt(+1);}
-
-	inline VetPtr& operator>>(uint64_t& val){
-		val = this->toNat();
-		this->next();
-		return *this;
-	}
-	inline VetPtr& operator>>(int64_t&  val){
-		val = this->toInt();
-		this->next();
-		return *this;
-	}
-	inline VetPtr& operator>>(double&   val){
-		val = this->toFlt();
-		this->next();
-		return *this;
-	}
-	inline VetPtr& operator>>(String&   val){
-		val = this->toStr();
-		this->next();
-		return *this;
-	}
-
-	inline VetItem operator[](size_t val){
-		VetItem res(*this);
-		res.seekNat(val);
-		return res;
-	}
-	inline VetItem operator[](String val){
-		//this->seekStr(val);
-		//return *((VetCtx1*) this);
-	 }
-};
-
-struct VetIt : Ctx {
-	inline VetIt& operator++(){
-		this->seekInt(+1); return *this;
-	}
-
-	inline VetIt& operator--(){
-		this->seekInt(+1); return *this;
-	}
-};
-
-
-struct MapItem : Ctx {
-	inline MapItem& operator[](String idx){
-cout << "1:" << idx << endl;
-		//this->seekStr(idx);
-		return *this;
-	}
-
-	inline Stat   stat(){return Stat(0);}
-	inline size_t size(){return 0;}
-
-	inline void operator=(uint8_t  val){this->setNat(val);}
-	inline void operator=(uint16_t val){this->setNat(val);}
-	inline void operator=(uint32_t val){this->setNat(val);}
-	inline void operator=(uint64_t val){this->setNat(val);}
-	inline void operator=(int8_t  val){this->setInt(val);}
-	inline void operator=(int16_t val){this->setInt(val);}
-	inline void operator=(int32_t val){this->setInt(val);}
-	inline void operator=(int64_t val){this->setInt(val);}
-	inline void operator=(float val){this->setFlt(val);}
-	inline void operator=(double val){this->setFlt(val);}
-	inline void operator=(String val){this->setStr(val);}
-};
-
-struct MapPtr : Ctx {
-	MapPtr(){}
-
-	MapPtr(const Ctx& ctx) : Ctx(ctx){
-
-	}
-
-	inline MapItem& operator[](String idx){
-		//this->seekStr(idx);
-cout << "0:" << idx << endl;
-		return *((MapItem*)this);
-	}
-};
-
-
-
-
-struct Cursor {
-	Ctx ctx;
-
-	Cursor(){}
-	Cursor(const Ctx ctx){
-		this->ctx = ctx;
-	}
-
-	inline void operator++(){}//this->ctx.next();}
-
-	inline bool isOk(){return this->ctx.stat().isPresent();}
-	inline Ctx  row(){return this->ctx.toColl();}
-};
-
-
-struct CtxPtr : Ctx {
-	Ctx base;
-	String root_s;
-	size_t root_i;
-
-
-};
-
-
-struct MapIt : Ctx {
-	Ctx base;
-
-	MapIt(const Ctx& ctx) : Ctx(ctx){
-
-	}
-
-	MapIt(const Cursor cur){}
-	inline bool isOk(){this->stat().isPresent();}
-	inline void operator++(){this->seekInt(+1);}
-
-	inline String id(){return this->idx_s;}
-
-	static String ctx_to_str(Ctx* ctx){
-		//MapIt* it = (MapIt*) ctx;
-		//return it->base[ it->idx_s ].toStr();
-	}
-
-	static void ctx_set_str(Ctx* ctx, String val){
-		//MapIt* it = (MapIt*) ctx;
-		//it->base[ it->idx_s ].setStr(val);
-	}
-
-
-};
-
-/*----------------------------------------------------------------------------*/
-
-
-
-
-/*============================================================================*/
-
-struct Coll  {
-	Stat stat;
-	Api  api;
-
-	Coll(){
-		this->api.to_str    = ctx_to_str;
-		this->api.end       = ctx_end;
-		this->api.serialize = ctx_serialize;
-		this->api.stat      = ctx_stat;
-		this->api.seek_nat  = ctx_seek_nat;
-		this->api.seek_int  = ctx_seek_int;
-		this->api.seek_str  = ctx_seek_str;
-	}
-
-	virtual void buildCtx(Ctx& ctx){
-		ctx.coll = this;
-		ctx.api  = &api;
-		ctx.data = NULL;
-	}
-
-	virtual Cursor begin(){}
-
-	virtual size_t size()=0;
-
-	virtual void putNat(uint64_t val)=0;
-	virtual void putInt(int64_t  val)=0;
-	virtual void putFlt(double   val)=0;
-	virtual void putStr(String   val)=0;
-	virtual void putColl(Coll* coll)=0;
-
-	// Macros
-	/*inline uint64_t toNat(){return ctx.toNat();}
-	inline int64_t  toInt(){return ctx.toInt();}
-	inline double   toFlt(){return ctx.toFlt();}*/
-	inline String   toStr(){
-		return "";
-	}
-
-	// Contexts Functions
-	static void   ctx_put_str(Ctx* ctx, String val){}
-	static String ctx_to_str(Ctx* ctx){return "";}
-	static void   ctx_end(Ctx* ctx){}
-	static Stat   ctx_stat(Ctx* ctx){return Stat(0);}
-
-	static void   ctx_seek_nat(Ctx* ctx, uint64_t idx){
-		ctx->idx_i  = 0;
-	}
-
-	static void   ctx_seek_int(Ctx* ctx, int64_t idx){
-		ctx->idx_i   = 0;
-	}
-
-	static void   ctx_seek_str(Ctx* ctx, String   idx){
-		ctx->idx_s.clear();
-	}
-
-	static String ctx_serialize(Coll* coll){
-		String res;
-		if ( coll->stat.isVet() ){
-			VetPtr vetptr(coll);
-			res += '[';
-			size_t size = vetptr.size();
-			if ( size > 0 ){
-				res += vetptr[0].toStr();
-				for (size_t i=1; i<size; i++){
-					res += ',';
-					//if ( vetptr[i].isColl() ){
-						//res += this->ctx_serialize(  );
-					//} else {
-						res += vetptr[i].toStr();
-					//}
-				}
-			}
-			res += ']';
-		} else if ( coll->stat.isMap() ){
-			res += "{\n";
-			for ( Cursor it=coll->begin(); it.isOk(); ++it ){
-				VetPtr row = it.row();
-				res += '\t';
-				res += row[0].toStr();
-				res += ": ";
-				res += row[1].toStr();
-				res += '\n';
-			}
-			res += '}';
+	/*friend std::ostream& operator<<(std::ostream& out, Node& node){
+		if ( node.isItem() ){
+			out << "Item";
+		} else if ( node.isColl() ){
+			out << "Coll";
 		}
-		return res;
-	}
+		return out;
+	}*/
 
-	// Friend Function
-	friend std::ostream& operator<<(std::ostream& out, Coll& coll){
-		//out << coll.erialize();
+	friend std::ostream& operator<<(std::ostream& out, Node node){
+		if ( node.isNull() ){
+			out << "Null";
+		} else if ( node.isItem() ){
+			out << "Item";
+			if ( node.stat().isStr() ){
+				out << "/Str:" << node.toStr();
+			}
+		} else if ( node.isColl() ){
+			out << "Coll";
+			if ( node.stat().isVet() ){
+				out << "/Vet";
+			} else if ( node.stat().isMap() ){
+				out << "/Map";
+			}
+		}
+		return out;
+	}
+};
+
+/*----------------------------------------------------------------------------*/
+
+
+/*============================================================================*/
+
+struct Unit {
+	// Unit - Basic
+	virtual Stat     stat()=0;
+	virtual uint64_t size()=0;
+	virtual void     clear()=0;
+
+	// Unit - Item
+	virtual uint64_t toNat  ()=0;
+	virtual int64_t  toInt  ()=0;
+	virtual double   toFlt  ()=0;
+	virtual String   toStr  ()=0;
+	virtual void     putNat (uint64_t val)=0;
+	virtual void     putInt (uint64_t val)=0;
+	virtual void     putFlt (double   val)=0;
+	virtual void     putStr (String   val)=0;
+	virtual void     putUnit(Unit* unit, bool reference=false){}
+
+	//virtual Node     open_item(bool only_read=false)=0;
+	virtual void     read_bytes (void* dst, size_t ini, size_t size)=0;
+	virtual void     write_bytes(void* src, size_t ini, size_t size)=0;
+
+	// Unit - Map e Vector
+	virtual Node     begin(){}
+	//virtual Node     select(String fields){}
+
+	// Unit - Stream
+	virtual size_t   row_get_id(){}
+	virtual void     row_next(){}
+	virtual void     row_prev(){}
+
+	// Collection
+	virtual Stat     node_stat (Node& node)=0;
+	virtual uint64_t node_size (Node& node)=0;
+	virtual void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){}
+	virtual void     node_make (Node& node, Stat type)=0;
+
+	// Collection, where Node is a Item
+	virtual uint64_t node_to_nat (Node& node, uint64_t notdef)=0;
+	virtual int64_t  node_to_int (Node& node, int64_t  notdef)=0;
+	virtual double   node_to_flt (Node& node, double   notdef)=0;
+	virtual String   node_to_str (Node& node, const char* notdef)=0;
+	virtual void     node_put_nat (Node& node, uint64_t val)=0;
+	virtual void     node_put_int (Node& node, uint64_t val)=0;
+	virtual void     node_put_flt (Node& node, double   val)=0;
+	virtual void     node_put_str (Node& node, String   val)=0;
+	virtual void     node_put_unit(Node& node, Unit* unit, bool reference=false){}
+
+	virtual Node     node_open(Node& node){}
+
+
+
+	// com subnodes
+	virtual void     node_join_nat(Node& out, uint64_t idx, Node* base)=0;
+	virtual void     node_join_str(Node& out, String   idx, Node* base)=0;
+
+
+	Node atNat(uint64_t idx){return Node(this, idx);}
+	Node atStr(String   idx){return Node(this, idx);}
+	Node operator[](size_t idx){return this->atNat(idx);}
+	Node operator[](String idx){return this->atStr(idx);}
+
+	inline bool isNull(){return this->stat().isNull();}
+	inline bool isItem(){return this->stat().isItem();}
+	inline bool isColl(){return this->stat().isColl();}
+	inline bool isVet(){return this->stat().isVet();}
+	inline bool isMap(){return this->stat().isMap();}
+
+
+	friend std::ostream& operator<<(std::ostream& out, Unit& unit){
+		if ( unit.isItem() ){
+			out << "Item";
+			if ( unit.stat().isInt() ){
+				out << "/Int:" << unit.toStr();
+			} else if ( unit.stat().isStr() ){
+				out << "/Str:" << unit.toStr();
+			}
+		} else if ( unit.isColl() ){
+			out << "Coll";
+			if ( unit.stat().isVet() ){
+				out << "/Vet:[";
+				for (size_t i=0; i<unit.size(); i++){
+					out << unit[i] << ";";
+				}
+				out << "]";
+			} else if ( unit.stat().isMap() ){
+				out << "/Map";
+				/*for (MapIt it=map.begin(); it.isOk(); it.next() ){
+					cout << it[0].toStr() << ": " << it[1].toStr() << endl;
+				}*/
+			}
+		}
 		return out;
 	}
 };
@@ -474,106 +235,187 @@ struct Coll  {
 
 
 
-
 /*============================================================================*/
 
-inline Ctx::Ctx(Coll* coll){
-	this->coll = coll;
-	this->root_i = 0;
-	coll->buildCtx(*this);
+inline Stat   Node::stat(){
+	return ( unit == NULL ) ? Stat(0) : unit->node_stat(*this);
 }
 
-inline bool   Ctx::isRootVet(){this->coll->stat.isVet();}
-inline bool   Ctx::isRootMap(){this->coll->stat.isMap();}
-inline size_t Ctx::size(){return this->coll->size();}
+inline size_t Node::size(){
+	return this->unit->node_size(*this);
+}
 
-/*inline Ctx& Ctx::putNat(uint64_t val){this->coll->putNat(val);return *this;}
-inline Ctx& Ctx::putInt(int64_t  val){this->coll->putInt(val);return *this;}
-inline Ctx& Ctx::putFlt(double   val){this->coll->putFlt(val);return *this;}
-inline Ctx& Ctx::putStr(String   val){this->coll->putStr(val);return *this;}*/
+inline Node   Node::open(){
+	return this->unit->node_open(*this);
+}
 
-//inline size_t Ctx::size(){return this->coll->size();}
-
-
-inline Stat VetPtr::stat(){return this->coll->stat;}
+inline String Node::toStr(){return this->unit->node_to_str(*this,"");}
 
 
-/*----------------------------------------------------------------------------*/
+inline void   Node::set(String val){this->unit->node_put_str(*this,val);}
 
+inline Node   Node::mkmap(){
+	this->unit->node_make(*this,Stat().setMap());
+	return *this;
+}
 
+inline Node   Node::mkvet(){
+	this->unit->node_make(*this,Stat().setVet());
+	return *this;
+}
 
+inline Node Node::operator[](int val){
+	Node res;
+	res.unit  = this->unit;
+	res.level = this->level+1;
+	this->unit->node_join_nat(res, val, this);
+	return res;
+}
 
-/*============================================================================*/
-
-
-struct Vet : Coll {
-
-	Vet(){
-		stat.setVet();
-		this->api.seek_nat = ctx_seek_nat;
-		this->api.seek_int = ctx_seek_int;
-		this->api.seek_str = ctx_seek_str;
-	}
-
-	inline VetItem& operator[](size_t val){
-		//this->ctx.seekNat(val);
-		//return (VetCtx1&) this->ctx;
-	}
-
-	inline Vet& operator<<(uint8_t  val){this->putInt(val); return *this;}
-	inline Vet& operator<<(uint16_t val){this->putInt(val); return *this;}
-	inline Vet& operator<<(uint32_t val){this->putInt(val); return *this;}
-	inline Vet& operator<<(uint64_t val){this->putInt(val); return *this;}
-	inline Vet& operator<<(int8_t   val){this->putInt(val); return *this;}
-	inline Vet& operator<<(int16_t  val){this->putInt(val); return *this;}
-	inline Vet& operator<<(int32_t  val){this->putInt(val); return *this;}
-	inline Vet& operator<<(int64_t  val){this->putInt(val); return *this;}
-	inline Vet& operator<<(float    val){this->putFlt(val); return *this;}
-	inline Vet& operator<<(double   val){this->putFlt(val); return *this;}
-	inline Vet& operator<<(String   val){this->putStr(val); return *this;}
-	inline Vet& operator<<(Coll&    val){this->putColl(&val); return *this;}
-
-
-	static void   ctx_seek_nat(Ctx* ctx, uint64_t idx){
-		ctx->path_i = idx;
-		ctx->idx_i  = ctx->root_i + idx;
-	}
-
-	static void   ctx_seek_int(Ctx* ctx, int64_t idx){
-		ctx->path_i += idx;
-		ctx->idx_i   = ctx->root_i + ctx->path_i;
-	}
-
-	static void   ctx_seek_str(Ctx* ctx, String   idx){
-		ctx->idx_s = idx;
-	}
-
-};
-
-struct VetFixed : Vet {
-	void putNat(uint64_t val){}
-	void putInt(int64_t  val){}
-	void putFlt(double   val){}
-	void putStr(String   val){}
-	void putColl(Coll* coll){}
-};
-
-
-struct Map : Coll {
-	Map(){
-		stat.setMap();
-	}
-
-	void putNat(uint64_t val){}
-	void putInt(int64_t  val){}
-	void putFlt(double   val){}
-	void putStr(String   val){}
-	void putColl(Coll* coll){}
-
-	inline MapItem& operator[](String val){
-		//this->ctx.seekStr(val);
-		//return (MapCtx1&) this->ctx;
-	}
-};
+inline Node Node::operator[](String val){
+	Node res;
+	res.unit  = this->unit;
+	res.level = this->level+1;
+	this->unit->node_join_str(res, val, this);
+	return res;
+}
 
 /*----------------------------------------------------------------------------*/
+
+
+struct ItemApi : Unit {
+	// Unit - Basic
+	Stat     stat()=0;
+	uint64_t size()=0;
+	void     clear()=0;
+
+	// Unit - Item
+	uint64_t toNat  ()=0;
+	int64_t  toInt  ()=0;
+	double   toFlt  ()=0;
+	String   toStr  ()=0;
+	void     putNat (uint64_t val)=0;
+	void     putInt (uint64_t val)=0;
+	void     putFlt (double   val)=0;
+	void     putStr (String   val)=0;
+
+	void     read_bytes (void* dst, size_t ini, size_t size)=0;
+	void     write_bytes(void* src, size_t ini, size_t size)=0;
+
+
+	// Unit - Stream
+	size_t   row_get_id()=0;
+	void     row_next()=0;
+	void     row_prev()=0;
+
+
+	// Unit - Map e Vector
+	Node     begin(){return Node(NULL);}
+	//virtual Node     select(String fields){}
+
+	// Collection
+	Stat     node_stat (Node& node){return Stat(0);}
+	uint64_t node_size (Node& node){return 1;}
+	void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){}
+	void     node_make (Node& node, Stat type){}
+
+	// Collection, where Node is a Item
+	uint64_t node_to_nat (Node& node, uint64_t notdef){return notdef;}
+	int64_t  node_to_int (Node& node, int64_t  notdef){return notdef;}
+	double   node_to_flt (Node& node, double   notdef){return notdef;}
+	String   node_to_str (Node& node, const char* notdef){return notdef;}
+	void     node_put_nat (Node& node, uint64_t val){}
+	void     node_put_int (Node& node, uint64_t val){}
+	void     node_put_flt (Node& node, double   val){}
+	void     node_put_str (Node& node, String   val){}
+
+
+	Node     node_open(Node& node){return Node(NULL);}
+
+
+
+	// com subnodes
+	void     node_join_nat(Node& out, uint64_t idx, Node* base){}
+	void     node_join_str(Node& out, String   idx, Node* base){}
+};
+
+
+struct CollApi : Unit {
+	// Unit - Basic
+	Stat     stat()=0;
+	uint64_t size()=0;
+	void     clear()=0;
+
+	// Unit - Item
+	uint64_t toNat  (){return 0;}
+	int64_t  toInt  (){return 0;}
+	double   toFlt  (){return 0;}
+	String   toStr  (){return "Coll.toStr";}
+	void     putNat (uint64_t val)=0;
+	void     putInt (uint64_t val)=0;
+	void     putFlt (double   val)=0;
+	void     putStr (String   val)=0;
+
+	void     read_bytes (void* dst, size_t ini, size_t size){}
+	void     write_bytes(void* src, size_t ini, size_t size){}
+
+
+	// Unit - Stream
+	size_t   row_get_id()=0;
+	void     row_next()=0;
+	void     row_prev()=0;
+
+
+	// Unit - Map e Vector
+	Node     begin()=0;
+	//virtual Node     select(String fields){}
+
+	// Collection
+	Stat     node_stat (Node& node)=0;
+	uint64_t node_size (Node& node)=0;
+	void     node_clear(Node& node, bool erase_idx=false, bool recursive=false)=0;
+	void     node_make (Node& node, Stat type)=0;
+
+	// Collection, where Node is a Item
+	uint64_t node_to_nat (Node& node, uint64_t notdef)=0;
+	int64_t  node_to_int (Node& node, int64_t  notdef)=0;
+	double   node_to_flt (Node& node, double   notdef)=0;
+	String   node_to_str (Node& node, const char* notdef)=0;
+	void     node_put_nat (Node& node, uint64_t val)=0;
+	void     node_put_int (Node& node, uint64_t val)=0;
+	void     node_put_flt (Node& node, double   val)=0;
+	void     node_put_str (Node& node, String   val)=0;
+
+	Node     node_open(Node& node)=0;
+
+
+
+	// com subnodes
+	void     node_join_nat(Node& out, uint64_t idx, Node* base)=0;
+	void     node_join_str(Node& out, String   idx, Node* base)=0;
+};
+
+
+
+
+
+
+
+
+
+struct MapIt : Node {
+	MapIt(const Node node){
+		this->unit  = node.unit;
+		this->level = 0;
+		this->idx_i = 0;
+	}
+	inline bool isOk(){return !this->unit->stat().isNull();}
+	inline void next(){this->unit->row_next();}
+
+	inline Node operator[](int val){
+		Node res;
+		res.unit  = this->unit;
+		res.idx_i = val;
+		return res;
+	}
+};

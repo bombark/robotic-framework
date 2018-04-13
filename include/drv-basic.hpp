@@ -1,189 +1,400 @@
+/*============================================================================*/
+
 #include <vector>
 #include <map>
 
+/*----------------------------------------------------------------------------*/
 
 
+/*============================================================================*/
 
-struct VetStr : Vet {
-	std::vector<Stat>   stats;
-	std::vector<string> data;
+struct ItemStr : ItemApi {
+	Stat type;
+	union {
+		uint64_t nat64;
+		int64_t  int64;
+		double   flt64;
+	};
+	string data;
 
-	VetStr(){
-		api.to_str  = ctx_to_str;
-		api.stat    = ctx_stat;
+	ItemStr(){}
+	ItemStr(int val){
+		type.setInt();
+		this->int64 = val;
+	}
+	ItemStr(String val){
+		type.setStr();
+		this->data = val;
 	}
 
-	void putNat(uint64_t val){
-		char buf[64]; sprintf(buf,"%lu",val);
-		this->data.push_back(buf);
-		this->stats.push_back( Stat().setNat() );
+	Stat     stat(){return type;}
+
+	uint64_t size(){
+		if ( type.isStr() ){
+			return data.size();
+		} else {
+			return sizeof(int64_t);
+		}
 	}
 
-	void putInt(int64_t  val){
-		char buf[64]; sprintf(buf,"%ld",val);
-		this->data.push_back(buf);
-		this->stats.push_back( Stat().setInt() );
+	String   toStr(){
+		if ( type.isStr() ){
+			return this->data;
+		} else {
+			return "0";
+		}
 	}
 
-	void putFlt(double   val){
-		char buf[64]; sprintf(buf,"%lf",val);
-		this->data.push_back(buf);
-		this->stats.push_back( Stat().setFlt() );
+	void     putStr(String val){data += val;}
+
+
+	void     clear(){
+		this->data.clear();
+		this->type.setItem();
 	}
 
-	void putStr(String val){
-		this->data.push_back(val);
-		this->stats.push_back( Stat().setStr() );
-	}
+	uint64_t toNat  (){return 0;}
+	int64_t  toInt  (){return 0;}
+	double   toFlt  (){return 0;}
+	void     putNat (uint64_t val){}
+	void     putInt (uint64_t val){}
+	void     putFlt (double   val){}
+	void     read_bytes (void* dst, size_t ini, size_t size){}
+	void     write_bytes(void* src, size_t ini, size_t size){}
 
-	virtual void putColl(Coll* coll){
-		/*if ( coll->stat.isVet() ){
-			String val = this->ctx.api.serialize(coll);
-			this->data.push_back(val);
-			this->stats.push_back( Stat().setVet() );
-		} else if ( coll->stat.isMap() ){
-			String val = this->ctx.api.serialize(coll);
-			this->data.push_back(val);
-			this->stats.push_back( Stat().setMap() );
-		}*/
-	}
-
-	// virtuals functions
-	size_t size(){return data.size();}
+	size_t   row_get_id(){}
+	void     row_next(){}
+	void     row_prev(){}
 
 
-	// ctx functions
-	/*void buildCtx(Ctx& ctx){
-		Coll::buildCtx(ctx);
-	}*/
+	Stat     node_stat  (Node& node){return Stat(0);}
+	uint64_t node_size  (Node& node){return 1;}
+	//String   node_to_str(Node& node){return "";}//data[node.idx_i];}
 
-	static Stat ctx_stat(Ctx* ctx){
-		VetStr* self = (VetStr*) ctx->coll;
-		if ( ctx->idx_i >= self->size() )
-			return Stat(0);
-		return self->stats[ctx->idx_i];
-	}
+	void     node_put_str(Node& node, String val){}
+	void     node_make(Node& node, Stat type){}
 
-	static String ctx_to_str(Ctx* ctx){
-		VetStr* self = (VetStr*) ctx->coll;
-		return self->data[ctx->idx_i];
-	}
+	void     node_join_nat(Node& out, uint64_t idx, Node* base){}
+	void     node_join_str(Node&, String, Node*){}
 };
 
+/*----------------------------------------------------------------------------*/
 
 
-struct MapStrIt : VetFixed {
-	std::map<String,String>::iterator it;
-	std::map<String,String>::iterator end;
+/*============================================================================*/
 
-	void buildCtx(Ctx& ctx){
-		Coll::buildCtx(ctx);
-		ctx.coll = this;
-		//ctx.api->to_str = ctx_to_str;
+struct VetUnit : CollApi {
+	vector<Unit*> data;
+
+	Stat     stat(){return Stat().setVet();}
+	uint64_t size(){return data.size();}
+	void     clear(){data.clear();}
+
+	void     putNat (uint64_t val){
+		ItemStr* item = new ItemStr(val);
+		data.push_back(item);
 	}
 
-	Cursor buildCursor(){
-		Cursor cur;
-		/*cur.ctx.coll = this;
-		cur.ctx.api.seek_int = cursor_seek_int;
-		cur.ctx.api.to_coll  = cursor_to_coll;
-		cur.ctx.api.stat     = cursor_stat;*/
-		return cur;
+	void     putInt (uint64_t val){
+		ItemStr* item = new ItemStr(val);
+		data.push_back(item);
 	}
 
-	size_t size(){return 2;}
-
-	static String ctx_to_str(Ctx* ctx){
-//cout << "ctx_to_str\n";
-		MapStrIt* self = (MapStrIt*) ctx->coll;
-		if ( ctx->idx_i == 0 )
-			return self->it->first;
-		if ( ctx->idx_i == 1 )
-			return self->it->second;
-		return "";
+	void     putFlt (double   val){
+		ItemStr* item = new ItemStr(val);
+		data.push_back(item);
 	}
 
-	static Stat ctx_stat(Ctx* ctx){
-		MapStrIt* self = (MapStrIt*) ctx->coll;
-		if ( ctx->idx_i == 0 )
-			return Stat().setStr();
-		if ( ctx->idx_i == 1 )
-			return Stat().setStr();
+	void     putStr (String   val){
+		ItemStr* item = new ItemStr(val);
+		data.push_back(item);
+	}
+
+	Node     begin(){}
+	size_t   row_get_id(){}
+	void     row_next(){}
+	void     row_prev(){}
+
+	Stat     node_stat (Node& node){
+		if ( node.idx_i >= data.size() )
+			return Stat(0);
+		return data[node.idx_i]->stat();
+	}
+
+	uint64_t node_size (Node& node){
+		return data[node.idx_i]->size();
+	}
+
+	void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){
+		return data[node.idx_i]->clear();
+	}
+
+	void     node_make (Node& node, Stat type){
+
+	}
+
+	uint64_t node_to_nat (Node& node, uint64_t notdef){
+		Unit* unit = data[node.idx_i];
+		return  unit->isItem() ? unit->toNat() : notdef;
+	}
+
+	int64_t  node_to_int (Node& node, int64_t  notdef){
+		Unit* unit = data[node.idx_i];
+		return  unit->isItem() ? unit->toInt() : notdef;
+	}
+
+	double   node_to_flt (Node& node, double   notdef){
+		Unit* unit = data[node.idx_i];
+		return  unit->isItem() ? unit->toFlt() : notdef;
+	}
+
+	String   node_to_str (Node& node, const char* notdef){
+		Unit* unit = data[node.idx_i];
+		return  unit->isItem() ? unit->toStr() : notdef;
+	}
+
+	void     node_put_nat (Node& node, uint64_t val){
+
+	}
+
+	void     node_put_int (Node& node, uint64_t val){
+
+	}
+
+	void     node_put_flt (Node& node, double   val){
+
+	}
+
+	void     node_put_str (Node& node, String   val){
+
+	}
+
+	Node     node_open(Node& node){
+
+	}
+
+	void     node_join_nat(Node& out, uint64_t idx, Node* base){}
+	void     node_join_str(Node& out, String   idx, Node* base){}
+};
+
+/*----------------------------------------------------------------------------*/
+
+
+
+/*============================================================================*/
+
+struct MapUnit : CollApi {
+	std::map<String,Unit*> data;
+
+	Stat     stat(){return Stat().setMap();}
+	uint64_t size(){return this->data.size();}
+
+	void     putStr(String val){}
+
+
+	struct iterator : CollApi {
+		std::map<String,Unit*>::iterator it;
+		std::map<String,Unit*>::iterator end;
+
+		iterator(MapUnit& unit){
+			this->it  = unit.data.begin();
+			this->end = unit.data.end();
+		}
+
+		Stat     stat(){
+			return  ( it != end ) ? Stat().setVet() : Stat(0);
+		}
+
+		uint64_t size(){return (it != end) ? 2 : 0;}
+
+		void     putStr(String val){}
+
+
+		void     clear(){}
+		void     putNat (uint64_t val){}
+		void     putInt (uint64_t val){}
+		void     putFlt (double   val){}
+		Node     begin(){return Node(NULL);}
+		size_t   row_get_id(){}
+		void     row_next(){++this->it;}
+		void     row_prev(){--this->it;}
+
+
+		Stat     node_stat  (Node& node){
+			if ( node.idx_i == 0 ){
+				return Stat().setStr();
+			} else if ( node.idx_i == 1 ){
+				return it->second->stat();
+			}
+			return Stat(0);
+		}
+
+		uint64_t node_size  (Node& node){
+			if ( node.idx_i == 0 ){
+				return it->first.size();
+			} else if ( node.idx_i == 1 ){
+				return it->second->size();
+			}
+			return 0;
+		}
+
+		void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){}
+		uint64_t node_to_nat (Node& node, uint64_t notdef){return notdef;}
+		int64_t  node_to_int (Node& node, int64_t  notdef){return notdef;}
+		double   node_to_flt (Node& node, double   notdef){return notdef;}
+		String   node_to_str (Node& node, const char* notdef){
+			if ( node.idx_i == 0 )
+				return it->first;
+			else if ( node.idx_i == 1 )
+				return it->second->toStr();
+			else
+				return notdef;
+		}
+
+		void     node_put_nat (Node& node, uint64_t val){}
+		void     node_put_int (Node& node, uint64_t val){}
+		void     node_put_flt (Node& node, double   val){}
+		Node     node_open(Node& node){}
+
+
+		void     node_join_nat(Node& out, uint64_t idx, Node* base){}
+		void     node_join_str(Node& out, String   idx, Node* base){}
+		void     node_put_str(Node& node, String val){}
+		void     node_make(Node& node, Stat type){}
+	};
+
+	void     clear(){
+
+	}
+
+
+	void     putNat (uint64_t val){}
+	void     putInt (uint64_t val){}
+	void     putFlt (double   val){}
+	size_t   row_get_id(){}
+	void     row_next(){}
+	void     row_prev(){}
+
+	Stat     node_stat  (Node& node){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() ){
+			return it->second->stat();
+		}
 		return Stat(0);
 	}
 
+	void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){}
 
-	static Stat cursor_stat(Ctx* ctx){
-		MapStrIt* self = (MapStrIt*) ctx->coll;
-		if ( self->it == self->end )
-			return Stat(0);
-		else {
-			return Stat().setVet();
+	uint64_t node_size(Node& node){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() ){
+			return it->second->size();
+		}
+		return 0;
+	}
+
+
+	uint64_t node_to_nat (Node& node, uint64_t notdef){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() && it->second->isItem() ){
+			return it->second->toNat();
+		}
+		return notdef;
+	}
+
+	int64_t  node_to_int (Node& node, int64_t  notdef){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() && it->second->isItem() ){
+			return it->second->toInt();
+		}
+		return notdef;
+	}
+
+	double   node_to_flt (Node& node, double   notdef){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() && it->second->isItem() ){
+			return it->second->toFlt();
+		}
+		return notdef;
+	}
+
+	String   node_to_str (Node& node, const char* notdef){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() ){
+			return it->second->toStr();
+		}
+		return notdef;
+	}
+
+	void node_put_nat (Node& node, uint64_t val){}
+	void node_put_int (Node& node, uint64_t val){}
+	void node_put_flt (Node& node, double   val){}
+	void node_put_str(Node& node, String val){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() ){
+			//it->second->putStr(val);
+		} else {
+			ItemStr* item = new ItemStr(val);
+			data.insert( std::pair<String,Unit*>(node.idx_s,item) );
 		}
 	}
 
-	static void cursor_seek_int(Ctx* ctx, int64_t idx){
-		MapStrIt* self = (MapStrIt*) ctx->coll;
-		++self->it;
+	void node_put_unit(Node& node, Unit* unit, bool reference=false){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() ){
+			//it->second->putStr(val);
+		} else {
+			data.insert( std::pair<String,Unit*>(node.idx_s,unit) );
+		}
 	}
 
-	static Ctx cursor_to_coll(Ctx* ctx){
-		MapStrIt* self = (MapStrIt*) ctx->coll;
-		Ctx res;
-		self->buildCtx(res);
+
+	Node     begin(){
+		Node res;
+		res.unit  = new MapUnit::iterator(*this);
+		res.idx_i = 0;
 		return res;
 	}
+
+
+
+
+
+
+
+
+	void     node_join_nat(Node& out, uint64_t idx, Node* base){
+		out.idx_i = 0;
+	}
+
+	void     node_join_str(Node& out, String   idx, Node* base){
+		out.idx_s = base->idx_s + "/" + idx;
+	}
+
+	Node     node_open(Node& node){
+		std::map<String,Unit*>::iterator it = data.find(node.idx_s);
+		if ( it != data.end() ){
+			return Node(it->second);
+		} else {
+			Node res;
+			return res;
+		}
+	}
+
+	void  node_make(Node& node, Stat type){
+		if ( node.isNull() ){
+			if ( type.isItem() ){
+				ItemStr* item = new ItemStr("novo");
+				data.insert( std::pair<String,Unit*>(node.idx_s,item) );
+			} else if ( type.isVet() ){
+				VetUnit* vet = new VetUnit();
+				data.insert( std::pair<String,Unit*>(node.idx_s,vet) );
+			} else if ( type.isMap() ){
+				MapUnit* map = new MapUnit();
+				data.insert( std::pair<String,Unit*>(node.idx_s,map) );
+			}
+		}
+	}
 };
 
-
-struct MapStr : Map {
-	std::map<String,String> data;
-
-	MapStr(){
-		api.stat    = ctx_stat;
-		api.to_str  = ctx_to_str;
-		api.set_str = ctx_set_str;
-	}
-
-	Cursor begin(){
-		MapStrIt* it = new MapStrIt();
-		it->it = this->data.begin();
-		it->end = this->data.end();
-		return it->buildCursor();
-	}
-
-
-	// virtuals functions
-	size_t size(){return data.size();}
-
-	static Stat ctx_stat(Ctx* ctx){
-		MapStr* self = (MapStr*) ctx->coll;
-		std::map<String,String>::iterator it = self->data.find(ctx->idx_s);
-		if ( it != self->data.end() ){
-			Stat stat;
-			stat.setStr();
-			return stat;
-		} else {
-			return Stat(0);
-		}
-	}
-
-	static void ctx_set_str(Ctx* ctx, String val){
-		MapStr* self = (MapStr*) ctx->coll;
-		std::map<String,String>::iterator it = self->data.find(ctx->idx_s);
-		if ( it != self->data.end() ){
-			it->second = val;
-		} else {
-			self->data.insert( std::pair<String,String>(ctx->idx_s,val) );
-		}
-	}
-
-	static String ctx_to_str(Ctx* ctx){
-		MapStr* self = (MapStr*) ctx->coll;
-		std::map<String,String>::iterator it = self->data.find(ctx->idx_s);
-		if ( it != self->data.end() ){
-			return it->second;
-		}
-		return "";
-	}
-};
+/*----------------------------------------------------------------------------*/
