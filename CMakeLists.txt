@@ -12,4 +12,4 @@ link_directories(/opt/ros/kinetic/lib)
 
 
 add_executable(teste "src/main4.cpp")
-target_link_libraries(teste roscpp rosconsole roscpp_serialization)
+target_link_libraries(teste roscpp rosconsole roscpp_serialization pthread)

@@ -1,9 +1,7 @@
 /*============================================================================*/
 
+#include <stdio.h>
 #include <stdint.h>
-#include <vector>
-#include <map>
-
 #include <iostream>
 
 typedef std::string String;
@@ -61,361 +59,749 @@ struct Stat {
 /*============================================================================*/
 
 struct Unit;
+struct Stream;
+struct Random;
 
-struct Node {
-	Unit*   unit;
-	int     level;
-	int64_t idx_i;
-	String  idx_s;
 
-	Node(){}
 
-	Node(Unit* unit, uint64_t idx=0){
-		this->unit  = unit;
-		this->level = 0;
-		this->idx_i = idx;
+struct Args {
+	short base;
+	short size;
+	char  format[4];
+	union {
+		uint64_t nat64[4];
+		int64_t  int64[4];
+		double   flt64[4];
+	};
+	String str[4];
+
+	Args(){this->clear();}
+
+	void clear(){
+		this->base = 0;
+		this->size = 0;
 	}
 
-	Node(Unit* unit, String idx){
-		this->unit  = unit;
-		this->level = 0;
-		this->idx_i = 0;
-		this->idx_s = idx;
+
+	void putNat(uint64_t val){
+		nat64[size]  = val;
+		format[size++] = 'u';
 	}
 
-	inline Stat   stat();
-	inline size_t size();
-	inline Node   open();
+	void putStr(String val){
+		str[size] = val;
+		format[size++] = 's';
+	}
 
-	inline bool   isNull(){this->stat().isNull();}
-	inline bool   isItem(){this->stat().isItem();}
-	inline bool   isColl(){this->stat().isColl();}
+	uint64_t& atNat(int id){return nat64[base+id];}
 
-	inline String toStr();
-
-	inline Node   mkmap();
-	inline Node   mkvet();
-
-	inline void   set(String val);
-
-
-	inline Node operator[](int val);
-	inline Node operator[](String val);
-
-	/*friend std::ostream& operator<<(std::ostream& out, Node& node){
-		if ( node.isItem() ){
-			out << "Item";
-		} else if ( node.isColl() ){
-			out << "Coll";
+	uint64_t getNat(int id){
+		size_t idx = base + id;
+		switch ( format[idx] ){
+			case 'u': return nat64[idx];
+			//case 's': return str[id];
+			case 'd': return int64[idx];
+			case 'f': return flt64[idx];
 		}
-		return out;
-	}*/
-
-	friend std::ostream& operator<<(std::ostream& out, Node node){
-		if ( node.isNull() ){
-			out << "Null";
-		} else if ( node.isItem() ){
-			out << "Item";
-			if ( node.stat().isStr() ){
-				out << "/Str:" << node.toStr();
-			}
-		} else if ( node.isColl() ){
-			out << "Coll";
-			if ( node.stat().isVet() ){
-				out << "/Vet";
-			} else if ( node.stat().isMap() ){
-				out << "/Map";
-			}
-		}
-		return out;
+		return 0;
 	}
+
+	String   getStr(int id){
+		size_t idx = base + id;
+		if ( format[idx] == 's' )
+			return str[idx];
+		else if ( format[idx] == 'u' ){
+			char buf[64]; sprintf(buf,"%lu",nat64[idx]);
+			return buf;
+		} else if ( format[id] == 'd' ){
+			char buf[64]; sprintf(buf,"%ld",int64[idx]);
+			return buf;
+		}  else if ( format[id] == 'f' ){
+			char buf[64]; sprintf(buf,"%lf",flt64[idx]);
+			return buf;
+		}
+		return "";
+	}
+
+	void operator=(uint64_t val){
+		base = 0; size = 1;
+		format[0] = 'u';
+		nat64[0]  = val;
+	}
+
+	uint64_t nextNat(){
+		uint64_t val = this->getNat(0); this->next();
+		return val;
+	}
+
+	void next(){this->base += 1;}
 };
 
-/*----------------------------------------------------------------------------*/
 
 
-/*============================================================================*/
+struct Ctx {
+	int    type;
+	Unit*  unit;
+	union {
+		void*   data;
+		char    d_char;
+		int64_t d_int64;
+	};
+	Args   idx;
+
+	Ctx(){type = 0;}
+	Ctx(Unit* unit){this->unit = unit;}
+	Ctx(Unit& unit){this->unit = &unit;}
+
+	bool isNull(){return unit==NULL;}
+	bool isStream(){return type==1;}
+	bool isRandom(){return type==2;}
+	bool isCtxRoot(){return type==3;}
+	bool isCtxNode(){return type==4;}
+};
+
 
 struct Unit {
-	// Unit - Basic
-	virtual Stat     stat()=0;
+	void ric_resize(size_t size){}
+	void ric_erase (size_t ini, size_t size, bool index_destroy){}
+
+	void coll_erase(Ctx* ctx, bool index_destroy){}
+
+
+	virtual ~Unit(){}
+
+	virtual void openRandom (Random& pack)=0;
+	virtual void openStream (Stream& pack)=0;
+
+	virtual void get_raw(Ctx* ctx, void* dst, size_t size)=0;
+	virtual void get_nat(Ctx* ctx, uint64_t& dst)=0;
+	virtual void get_int(Ctx* ctx, int64_t&  dst)=0;
+	virtual void get_flt(Ctx* ctx, double&   dst)=0;
+	virtual void get_str(Ctx* ctx, String&   dst)=0;
+
+	virtual void put_raw(Ctx* ctx, const void* src, size_t size)=0;
+	virtual void put_nat(Ctx* ctx, uint64_t val)=0;
+	virtual void put_int(Ctx* ctx, int64_t  val)=0;
+	virtual void put_flt(Ctx* ctx, double   val)=0;
+	virtual void put_str(Ctx* ctx, String   val)=0;
+	virtual void put_cmd(Ctx* ctx, int type)=0;
+
 	virtual uint64_t size()=0;
-	virtual void     clear()=0;
-
-	// Unit - Item
-	virtual uint64_t toNat  ()=0;
-	virtual int64_t  toInt  ()=0;
-	virtual double   toFlt  ()=0;
-	virtual String   toStr  ()=0;
-	virtual void     putNat (uint64_t val)=0;
-	virtual void     putInt (uint64_t val)=0;
-	virtual void     putFlt (double   val)=0;
-	virtual void     putStr (String   val)=0;
-	virtual void     putUnit(Unit* unit, bool reference=false){}
-
-	//virtual Node     open_item(bool only_read=false)=0;
-	virtual void     read_bytes (void* dst, size_t ini, size_t size)=0;
-	virtual void     write_bytes(void* src, size_t ini, size_t size)=0;
-
-	// Unit - Map e Vector
-	virtual Node     begin(){}
-	//virtual Node     select(String fields){}
-
-	// Unit - Stream
-	virtual size_t   row_get_id(){}
-	virtual void     row_next(){}
-	virtual void     row_prev(){}
-
-	// Collection
-	virtual Stat     node_stat (Node& node)=0;
-	virtual uint64_t node_size (Node& node)=0;
-	virtual void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){}
-	virtual void     node_make (Node& node, Stat type)=0;
-
-	// Collection, where Node is a Item
-	virtual uint64_t node_to_nat (Node& node, uint64_t notdef)=0;
-	virtual int64_t  node_to_int (Node& node, int64_t  notdef)=0;
-	virtual double   node_to_flt (Node& node, double   notdef)=0;
-	virtual String   node_to_str (Node& node, const char* notdef)=0;
-	virtual void     node_put_nat (Node& node, uint64_t val)=0;
-	virtual void     node_put_int (Node& node, uint64_t val)=0;
-	virtual void     node_put_flt (Node& node, double   val)=0;
-	virtual void     node_put_str (Node& node, String   val)=0;
-	virtual void     node_put_unit(Node& node, Unit* unit, bool reference=false){}
-
-	virtual Node     node_open(Node& node){}
+	//virtual void   seek(Ctx* ctx, size_t pos)=0;
+	virtual String toStr()=0;
+};
 
 
+struct UnitBasic : Unit {
+	void get_nat  (Ctx* ctx, uint64_t& dst){
+		this->get_raw(ctx,(void*)&dst,sizeof(uint64_t));
+	}
 
-	// com subnodes
-	virtual void     node_join_nat(Node& out, uint64_t idx, Node* base)=0;
-	virtual void     node_join_str(Node& out, String   idx, Node* base)=0;
+	void get_int  (Ctx* ctx, int64_t& dst){
+		this->get_raw(ctx,(void*)&dst,sizeof(int64_t));
+	}
 
+	void get_flt  (Ctx* ctx, double& dst){
+		this->get_raw(ctx,(void*)&dst,sizeof(double));
+	}
 
-	Node atNat(uint64_t idx){return Node(this, idx);}
-	Node atStr(String   idx){return Node(this, idx);}
-	Node operator[](size_t idx){return this->atNat(idx);}
-	Node operator[](String idx){return this->atStr(idx);}
+	void put_nat  (Ctx* ctx, uint64_t val){
+		this->put_raw(ctx,(void*)&val,sizeof(val));
+	}
 
-	inline bool isNull(){return this->stat().isNull();}
-	inline bool isItem(){return this->stat().isItem();}
-	inline bool isColl(){return this->stat().isColl();}
-	inline bool isVet(){return this->stat().isVet();}
-	inline bool isMap(){return this->stat().isMap();}
+	void put_int  (Ctx* ctx, int64_t val){
+		this->put_raw(ctx,(void*)&val,sizeof(val));
+	}
 
+	void put_flt  (Ctx* ctx, double val){
+		this->put_raw(ctx,(void*)&val,sizeof(val));
+	}
 
-	friend std::ostream& operator<<(std::ostream& out, Unit& unit){
-		if ( unit.isItem() ){
-			out << "Item";
-			if ( unit.stat().isInt() ){
-				out << "/Int:" << unit.toStr();
-			} else if ( unit.stat().isStr() ){
-				out << "/Str:" << unit.toStr();
-			}
-		} else if ( unit.isColl() ){
-			out << "Coll";
-			if ( unit.stat().isVet() ){
-				out << "/Vet:[";
-				for (size_t i=0; i<unit.size(); i++){
-					out << unit[i] << ";";
-				}
-				out << "]";
-			} else if ( unit.stat().isMap() ){
-				out << "/Map";
-				/*for (MapIt it=map.begin(); it.isOk(); it.next() ){
-					cout << it[0].toStr() << ": " << it[1].toStr() << endl;
-				}*/
-			}
-		}
-		return out;
+	void put_str(Ctx* ctx, String str){
+		this->put_raw(ctx,str.c_str(),str.size());
 	}
 };
 
-/*----------------------------------------------------------------------------*/
 
+struct CtxData : Ctx {
+	CtxData() : Ctx() {}
+	CtxData(Unit* unit) : Ctx(unit){}
+	CtxData(Unit& unit) : Ctx(unit){}
 
-
-/*============================================================================*/
-
-inline Stat   Node::stat(){
-	return ( unit == NULL ) ? Stat(0) : unit->node_stat(*this);
-}
-
-inline size_t Node::size(){
-	return this->unit->node_size(*this);
-}
-
-inline Node   Node::open(){
-	return this->unit->node_open(*this);
-}
-
-inline String Node::toStr(){return this->unit->node_to_str(*this,"");}
-
-
-inline void   Node::set(String val){this->unit->node_put_str(*this,val);}
-
-inline Node   Node::mkmap(){
-	this->unit->node_make(*this,Stat().setMap());
-	return *this;
-}
-
-inline Node   Node::mkvet(){
-	this->unit->node_make(*this,Stat().setVet());
-	return *this;
-}
-
-inline Node Node::operator[](int val){
-	Node res;
-	res.unit  = this->unit;
-	res.level = this->level+1;
-	this->unit->node_join_nat(res, val, this);
-	return res;
-}
-
-inline Node Node::operator[](String val){
-	Node res;
-	res.unit  = this->unit;
-	res.level = this->level+1;
-	this->unit->node_join_str(res, val, this);
-	return res;
-}
-
-/*----------------------------------------------------------------------------*/
-
-
-struct ItemApi : Unit {
-	// Unit - Basic
-	Stat     stat()=0;
-	uint64_t size()=0;
-	void     clear()=0;
-
-	// Unit - Item
-	uint64_t toNat  ()=0;
-	int64_t  toInt  ()=0;
-	double   toFlt  ()=0;
-	String   toStr  ()=0;
-	void     putNat (uint64_t val)=0;
-	void     putInt (uint64_t val)=0;
-	void     putFlt (double   val)=0;
-	void     putStr (String   val)=0;
-
-	void     read_bytes (void* dst, size_t ini, size_t size)=0;
-	void     write_bytes(void* src, size_t ini, size_t size)=0;
-
-
-	// Unit - Stream
-	size_t   row_get_id()=0;
-	void     row_next()=0;
-	void     row_prev()=0;
-
-
-	// Unit - Map e Vector
-	Node     begin(){return Node(NULL);}
-	//virtual Node     select(String fields){}
-
-	// Collection
-	Stat     node_stat (Node& node){return Stat(0);}
-	uint64_t node_size (Node& node){return 1;}
-	void     node_clear(Node& node, bool erase_idx=false, bool recursive=false){}
-	void     node_make (Node& node, Stat type){}
-
-	// Collection, where Node is a Item
-	uint64_t node_to_nat (Node& node, uint64_t notdef){return notdef;}
-	int64_t  node_to_int (Node& node, int64_t  notdef){return notdef;}
-	double   node_to_flt (Node& node, double   notdef){return notdef;}
-	String   node_to_str (Node& node, const char* notdef){return notdef;}
-	void     node_put_nat (Node& node, uint64_t val){}
-	void     node_put_int (Node& node, uint64_t val){}
-	void     node_put_flt (Node& node, double   val){}
-	void     node_put_str (Node& node, String   val){}
-
-
-	Node     node_open(Node& node){return Node(NULL);}
-
-
-
-	// com subnodes
-	void     node_join_nat(Node& out, uint64_t idx, Node* base){}
-	void     node_join_str(Node& out, String   idx, Node* base){}
-};
-
-
-struct CollApi : Unit {
-	// Unit - Basic
-	Stat     stat()=0;
-	uint64_t size()=0;
-	void     clear()=0;
-
-	// Unit - Item
-	uint64_t toNat  (){return 0;}
-	int64_t  toInt  (){return 0;}
-	double   toFlt  (){return 0;}
-	String   toStr  (){return "Coll.toStr";}
-	void     putNat (uint64_t val)=0;
-	void     putInt (uint64_t val)=0;
-	void     putFlt (double   val)=0;
-	void     putStr (String   val)=0;
-
-	void     read_bytes (void* dst, size_t ini, size_t size){}
-	void     write_bytes(void* src, size_t ini, size_t size){}
-
-
-	// Unit - Stream
-	size_t   row_get_id()=0;
-	void     row_next()=0;
-	void     row_prev()=0;
-
-
-	// Unit - Map e Vector
-	Node     begin()=0;
-	//virtual Node     select(String fields){}
-
-	// Collection
-	Stat     node_stat (Node& node)=0;
-	uint64_t node_size (Node& node)=0;
-	void     node_clear(Node& node, bool erase_idx=false, bool recursive=false)=0;
-	void     node_make (Node& node, Stat type)=0;
-
-	// Collection, where Node is a Item
-	uint64_t node_to_nat (Node& node, uint64_t notdef)=0;
-	int64_t  node_to_int (Node& node, int64_t  notdef)=0;
-	double   node_to_flt (Node& node, double   notdef)=0;
-	String   node_to_str (Node& node, const char* notdef)=0;
-	void     node_put_nat (Node& node, uint64_t val)=0;
-	void     node_put_int (Node& node, uint64_t val)=0;
-	void     node_put_flt (Node& node, double   val)=0;
-	void     node_put_str (Node& node, String   val)=0;
-
-	Node     node_open(Node& node)=0;
-
-
-
-	// com subnodes
-	void     node_join_nat(Node& out, uint64_t idx, Node* base)=0;
-	void     node_join_str(Node& out, String   idx, Node* base)=0;
-};
-
-
-
-
-
-
-
-
-
-struct MapIt : Node {
-	MapIt(const Node node){
-		this->unit  = node.unit;
-		this->level = 0;
-		this->idx_i = 0;
+	uint64_t getNat(){
+		uint64_t val; this->unit->get_nat(this,val);
+		return val;
 	}
-	inline bool isOk(){return !this->unit->stat().isNull();}
-	inline void next(){this->unit->row_next();}
 
-	inline Node operator[](int val){
-		Node res;
-		res.unit  = this->unit;
-		res.idx_i = val;
+	int64_t  getInt(){
+		int64_t val; this->unit->get_int(this,val);
+		return val;
+	}
+
+	double   getFlt(){
+		double val; this->unit->get_flt(this,val);
+		return val;
+	}
+
+	void getRaw(void* dst, size_t size){
+		this->unit->get_raw(this,dst,size);
+	}
+
+	template <typename T> T getRawAs(){
+		T res; this->unit->get_raw(this,&res,sizeof(T));
 		return res;
 	}
+
+	void putRaw(const void* val, size_t size){this->unit->put_raw(this,val,size);}
+
+	template <typename T> void putRawAs(T val){
+		this->unit->put_raw(this,&val,sizeof(T));
+	}
+
+};
+
+
+
+struct StreamNode;
+
+struct Stream : CtxData {
+	Stream() : CtxData() {}
+	Stream(Unit* unit) : CtxData(unit){
+		this->type=1;
+		this->unit->openStream(*this);
+	}
+	Stream(Unit& unit) : CtxData(unit){
+		this->type=1;
+		this->unit->openStream(*this);
+	}
+
+
+	void putNat(uint64_t val){
+		//this->unit->put_cmd(this,0);
+		this->unit->put_nat(this,val);
+		this->unit->put_cmd(this,1);
+	}
+
+	void putInt(int64_t  val){
+		//this->unit->put_cmd(this,0);
+		this->unit->put_int(this,val);
+		this->unit->put_cmd(this,1);
+	}
+
+	void putFlt(double   val){
+		//this->unit->put_cmd(this,0);
+		this->unit->put_flt(this,val);
+		this->unit->put_cmd(this,1);
+	}
+
+	void putStr(String val){
+		//this->unit->put_cmd(this,0);
+		this->unit->put_str(this,val);
+		this->unit->put_cmd(this,1);
+	}
+
+	void endl(){this->unit->put_cmd(this,2);}
+
+	Stream& put(uint8_t val){this->putNat(val);return *this;}
+	Stream& put(uint16_t val){this->putNat(val);return *this;}
+	Stream& put(uint32_t val){this->putNat(val);return *this;}
+	Stream& put(uint64_t val){this->putNat(val);return *this;}
+
+	Stream& put(int8_t val){this->putInt(val);return *this;}
+	Stream& put(int16_t val){this->putInt(val);return *this;}
+	Stream& put(int32_t val){this->putInt(val);return *this;}
+	Stream& put(int64_t val){this->putInt(val);return *this;}
+
+	Stream& put(float val){this->putFlt(val);return *this;}
+	Stream& put(double val){this->putFlt(val);return *this;}
+
+	Stream& put(String val){this->putStr(val);return *this;}
+	Stream& put(void* val, size_t size){this->putRaw(val,size);return *this;}
+
+	size_t getIdx(){return idx.getNat(0);}
+
+	StreamNode mkvet();
+	StreamNode format(const char* format);
+};
+
+
+struct StreamNode : Stream {
+	Stream* super;
+
+	StreamNode(Stream* super){
+		this->super = super;
+	}
+
+	StreamNode& put(uint8_t val){this->unit->put_nat(this,val);return *this;}
+	StreamNode& put(uint16_t val){this->unit->put_nat(this,val);return *this;}
+	StreamNode& put(uint32_t val){this->unit->put_nat(this,val);return *this;}
+	StreamNode& put(uint64_t val){this->unit->put_nat(this,val);return *this;}
+
+	StreamNode& put(int8_t val){this->unit->put_int(this,val);return *this;}
+	StreamNode& put(int16_t val){this->unit->put_int(this,val);return *this;}
+	StreamNode& put(int32_t val){this->unit->put_int(this,val);return *this;}
+	StreamNode& put(int64_t val){this->unit->put_int(this,val);return *this;}
+
+	StreamNode& put(float val){this->unit->put_flt(this,val);return *this;}
+	StreamNode& put(double val){this->unit->put_flt(this,val);return *this;}
+
+	StreamNode& put(String val){this->putStr(val);return *this;}
+	StreamNode& put(void* val, size_t size){this->putRaw(val,size);return *this;}
+
+	Stream& leave(){
+		//unit->put_cmd(this);
+//cout << unit->toStr() << "\n";
+		return *super;
+	}
+};
+
+
+struct StreamMsg : Stream {
+	StreamMsg() : Stream() {}
+	StreamMsg(Unit* unit) : Stream(unit){}
+	StreamMsg(Unit& unit) : Stream(unit){}
+
+	void read(){this->unit->put_cmd(this,0);}
+};
+
+struct Reader : Stream {
+	Reader() : Stream() {}
+	Reader(Unit* unit) : Stream(unit){}
+	Reader(Unit& unit) : Stream(unit){}
+
+	void readRow(){this->unit->put_cmd(this,0);}
+	String toStr(){return this->unit->toStr();}
+};
+
+struct Writer : Stream {
+	Writer() : Stream() {}
+	Writer(Unit* unit) : Stream(unit){}
+	Writer(Unit& unit) : Stream(unit){}
+};
+
+
+
+struct TextSerializer : UnitBasic {
+	const char* format;
+	size_t i;
+	String res;
+
+	TextSerializer(const char* format){
+		this->format = format;
+		this->i = 0;
+	}
+
+	void put_nat(Ctx* ctx, uint64_t val){
+		if ( next() ){
+			char buf[64]; sprintf(buf,"%lu",val);
+			res += buf;
+		}
+	}
+
+	void put_int(Ctx* ctx, int64_t val){
+		if ( next() ){
+			char buf[64]; sprintf(buf,"%ld",val);
+			res += buf;
+		}
+	}
+
+	void put_flt(Ctx* ctx, double val){
+		if ( next() ){
+			char buf[64]; sprintf(buf,"%lf",val);
+			res += buf;
+		}
+	}
+
+	void put_str(Ctx* ctx, String val){
+		if ( next() ){
+			res += val;
+		}
+	}
+
+
+	bool next(){
+		while ( true ){
+			char c = format[i];
+			if ( c == '?' ) {
+				i += 1;
+				return true;
+			} else if ( c == '\0' ){
+				return false;
+			} else {
+				i += 1;
+				res += c;
+			}
+		}
+	}
+
+	void openRandom (Random& pack){}
+	void openStream (Stream& pack){}
+	void get_raw(Ctx* ctx, void* src, size_t size){}
+	void get_str(Ctx* ctx, String&   dst){}
+	void put_raw(Ctx* ctx, const void* src, size_t size){}
+
+	void put_cmd(Ctx* ctx, int type){
+		this->next();
+	}
+
+	uint64_t size(){}
+	String toStr(){return res;}
+
+};
+
+
+
+
+
+
+
+inline StreamNode Stream::mkvet(){
+	StreamNode res(this);
+	return res;
+}
+
+StreamNode Stream::format(const char* format){
+	StreamNode res(this);
+	res.unit = new TextSerializer(format);
+	return res;
+}
+
+
+
+struct RandomNode;
+
+struct Random : CtxData {
+	Random() : CtxData() {}
+	Random(Unit* unit) : CtxData(unit){
+		this->type=2;
+		this->unit->openRandom(*this);
+	}
+	Random(Unit& unit) : CtxData(unit){
+		this->type=2;
+		this->unit->openRandom(*this);
+	}
+
+	inline RandomNode& operator[](size_t idx);
+};
+
+struct RandomNode : CtxData {
+	uint64_t toNat(){
+		uint64_t buf; this->unit->get_nat(this,buf);
+		return buf;
+	}
+
+	int64_t toInt(){
+		int64_t buf; this->unit->get_int(this,buf);
+		return buf;
+	}
+
+	double toFlt(){
+		double buf; this->unit->get_flt(this,buf);
+		return buf;
+	}
+
+	String toStr(){
+		String buf; this->unit->get_str(this,buf);
+		return buf;
+	}
+
+	void putNat(uint64_t val){this->unit->put_nat(this,val);}
+	void putInt(int64_t  val){this->unit->put_int(this,val);}
+	void putFlt(double   val){this->unit->put_flt(this,val);}
+	void putStr(String val){this->unit->put_str(this,val);}
+
+	void operator=(uint8_t val){this->putNat(val);}
+	void operator=(uint16_t val){this->putNat(val);}
+	void operator=(uint32_t val){this->putNat(val);}
+	void operator=(uint64_t val){this->putNat(val);}
+	void operator=(int8_t val){this->putInt(val);}
+	void operator=(int16_t val){this->putInt(val);}
+	void operator=(int32_t val){this->putInt(val);}
+	void operator=(int64_t val){this->putInt(val);}
+	void operator=(float  val){this->putFlt(val);}
+	void operator=(double val){this->putFlt(val);}
+	void operator=(String val){this->putStr(val);}
+
+	RandomNode& operator[](size_t idx){
+		this->idx.putNat(idx); return *this;
+	}
+};
+
+inline RandomNode& Random::operator[](size_t idx){
+	this->idx.clear();
+	this->idx.putNat(idx);
+	return *((RandomNode*)this);
+}
+
+/*----------------------------------------------------------------------------*/
+
+
+
+
+struct RawBase : Ctx {
+	RawBase() : Ctx(){}
+	RawBase(Unit& unit) : Ctx(unit){}
+
+	void read(void* dst, size_t size){
+		this->unit->get_raw(this,dst,size);
+	}
+
+	void write(const void* val, size_t size){
+		this->unit->put_raw(this,val,size);
+	}
+};
+
+struct Raw : RawBase {
+	Raw() : RawBase(){}
+	Raw(Unit& unit) : RawBase(unit){}
+
+	void blank(){}
+	void erase(){}
+
+	Raw& put  (char     val){this->write(&val,sizeof(val));return *this;}
+	Raw& put8 (uint8_t  val){this->write(&val,sizeof(val));return *this;}
+	Raw& put8 (int8_t   val){this->write(&val,sizeof(val));return *this;}
+	Raw& put16(uint16_t val){this->write(&val,sizeof(val));return *this;}
+	Raw& put16(int16_t  val){this->write(&val,sizeof(val));return *this;}
+	Raw& put32(uint32_t val){this->write(&val,sizeof(val));return *this;}
+	Raw& put32(int32_t  val){this->write(&val,sizeof(val));return *this;}
+	Raw& put32(float    val){this->write(&val,sizeof(val));return *this;}
+	Raw& put64(uint64_t val){this->write(&val,sizeof(val));return *this;}
+	Raw& put64(int64_t  val){this->write(&val,sizeof(val));return *this;}
+	Raw& put64(double   val){this->write(&val,sizeof(val));return *this;}
+	Raw& put  (String   val){this->write(val.c_str(),val.size());return *this;}
+
+	String toStr(){String val; this->unit->get_str(this,val); return val;}
+
+	template <typename T> T get(){
+		T res; this->read(&res,sizeof(T));
+		return res;
+	}
+
+	template <typename T> Raw& put(T val){
+		this->write(&val,sizeof(T));
+		return *this;
+	}
+
+	inline Raw& operator[](size_t idx){this->idx = idx; return *this; }
+
+	inline Raw& operator()(size_t ini,size_t end){
+		this->idx = ini; this->idx.putNat(end);
+		return *this;
+	}
+	//inline void operator+=()
+};
+
+struct ReaderRaw : RawBase {
+	ReaderRaw() : RawBase(){}
+	ReaderRaw(Unit& unit) : RawBase(unit){}
+
+	char get(){char c;this->unit->get_raw(this,&c,1);return c;}
+};
+
+struct WriterRaw : RawBase {
+	ReaderRaw& put();
+};
+
+
+
+struct Val : Ctx {
+	Val() : Ctx(){}
+	Val(Unit& unit) : Ctx(unit){}
+
+	inline uint64_t toNat(){uint64_t val;this->unit->get_nat(this,val); return val;}
+	inline int64_t  toInt(){int64_t  val;this->unit->get_int(this,val); return val;}
+	inline double   toFlt(){double   val;this->unit->get_flt(this,val); return val;}
+	inline String   toStr(){String   val;this->unit->get_str(this,val); return val;}
+
+	void setNat(uint64_t val){this->unit->put_nat(this,val);}
+	void setInt(int64_t  val){this->unit->put_int(this,val);}
+	void setFlt(double   val){this->unit->put_flt(this,val);}
+	void setStr(String   val){this->unit->put_str(this,val);}
+
+	void operator=(uint8_t  val){return this->setNat(val);}
+	void operator=(uint16_t val){return this->setNat(val);}
+	void operator=(uint32_t val){return this->setNat(val);}
+	void operator=(uint64_t val){return this->setNat(val);}
+
+	void operator=(int8_t  val){return this->setInt(val);}
+	void operator=(int16_t val){return this->setInt(val);}
+	void operator=(int32_t val){return this->setInt(val);}
+	void operator=(int64_t val){return this->setInt(val);}
+
+	void operator=(float   val){return this->setFlt(val);}
+	void operator=(double  val){return this->setFlt(val);}
+	void operator=(String  val){return this->setStr(val);}
+
+	inline Raw& operator[](size_t idx){}
+};
+
+
+struct ReaderVal : Ctx {
+	ReaderVal() : Ctx(){}
+	ReaderVal(Unit& unit) : Ctx(unit){}
+
+	ReaderVal& getNat(uint64_t& val){this->unit->put_nat(this,val);return *this;}
+	ReaderVal& getInt(int64_t&  val){this->unit->put_int(this,val);return *this;}
+	ReaderVal& getFlt(double&   val){this->unit->put_flt(this,val);return *this;}
+	ReaderVal& getStr(String&   val){this->unit->put_str(this,val);return *this;}
+
+	/*WriterVal& get(uint8_t  val){return this->putNat(val);}
+	WriterVal& get(uint16_t val){return this->putNat(val);}
+	WriterVal& get(uint32_t val){return this->putNat(val);}
+	WriterVal& get(uint64_t val){return this->putNat(val);}
+
+	WriterVal& put(int8_t  val){return this->putInt(val);}
+	WriterVal& put(int16_t val){return this->putInt(val);}
+	WriterVal& put(int32_t val){return this->putInt(val);}
+	WriterVal& put(int64_t val){return this->putInt(val);}
+
+	WriterVal& put(float   val){return this->putFlt(val);}
+	WriterVal& put(double  val){return this->putFlt(val);}
+	WriterVal& put(String  val){return this->putStr(val);}*/
+
+	inline bool next(){}
+};
+
+struct WriterVal : Ctx {
+	WriterVal() : Ctx(){}
+	WriterVal(Unit& unit) : Ctx(unit){}
+
+	WriterVal& putNat(uint64_t val){this->unit->put_nat(this,val);return *this;}
+	WriterVal& putInt(int64_t  val){this->unit->put_int(this,val);return *this;}
+	WriterVal& putFlt(double   val){this->unit->put_flt(this,val);return *this;}
+	WriterVal& putStr(String   val){this->unit->put_str(this,val);return *this;}
+
+	WriterVal& put(uint8_t  val){return this->putNat(val);}
+	WriterVal& put(uint16_t val){return this->putNat(val);}
+	WriterVal& put(uint32_t val){return this->putNat(val);}
+	WriterVal& put(uint64_t val){return this->putNat(val);}
+
+	WriterVal& put(int8_t  val){return this->putInt(val);}
+	WriterVal& put(int16_t val){return this->putInt(val);}
+	WriterVal& put(int32_t val){return this->putInt(val);}
+	WriterVal& put(int64_t val){return this->putInt(val);}
+
+	WriterVal& put(float   val){return this->putFlt(val);}
+	WriterVal& put(double  val){return this->putFlt(val);}
+	WriterVal& put(String  val){return this->putStr(val);}
+
+	inline void endl(){}
+};
+
+
+
+struct VetNode;
+
+struct VetPtr : Ctx {
+	VetPtr() : Ctx(){}
+	VetPtr(Unit& unit) : Ctx(unit){}
+
+	inline Stat   stat(){return Stat(0);}
+	inline size_t size(){return this->unit->size();}
+
+	inline VetPtr& putNat(uint64_t val){
+		this->unit->put_nat(NULL,val); return *this;
+	}
+
+	inline VetPtr& putInt(int64_t val){
+		this->unit->put_int(NULL,val); return *this;
+	}
+
+	inline VetPtr& putStr(String val){
+		this->unit->put_str(NULL,val); return *this;
+	}
+
+	inline VetPtr& put(String val){return this->putStr(val);}
+
+	inline VetNode& operator[](size_t idx);
+	inline VetNode& operator[](String idx);
+};
+
+struct VetNode : Ctx {
+	inline Stat   stat(){return Stat(0);}
+	inline size_t size(){return 1;}
+
+	uint64_t toNat(){uint64_t val;this->unit->get_nat(this,val); return val;}
+	int64_t  toInt(){int64_t  val;this->unit->get_int(this,val); return val;}
+	double   toFlt(){double   val;this->unit->get_flt(this,val); return val;}
+	String   toStr(){String   val;this->unit->get_str(this,val); return val;}
+
+	void setNat(uint64_t val){this->unit->put_nat(this,val);}
+	void setInt(int64_t  val){this->unit->put_int(this,val);}
+	void setFlt(double   val){this->unit->put_flt(this,val);}
+	void setStr(String   val){this->unit->put_str(this,val);}
+
+	bool isNull(){this->stat().isNull();}
+	bool isBlank(){}
+	bool isItem(){}
+	bool isRaw(){}
+	bool isNat(){}
+	bool isInt(){}
+	bool isFlt(){}
+	bool isStr(){}
+	bool isColl(){}
+	bool isVet(){}
+	bool isMap(){}
+
+	void operator=(uint8_t  val){this->setNat(val);}
+	void operator=(uint16_t val){this->setNat(val);}
+	void operator=(uint32_t val){this->setNat(val);}
+	void operator=(uint64_t val){this->setNat(val);}
+	void operator=(int8_t   val){this->setInt(val);}
+	void operator=(int16_t  val){this->setInt(val);}
+	void operator=(int32_t  val){this->setInt(val);}
+	void operator=(int64_t  val){this->setInt(val);}
+	void operator=(float    val){this->setFlt(val);}
+	void operator=(double   val){this->setFlt(val);}
+	void operator=(String   val){this->setStr(val);}
+
+	inline VetNode& operator[](size_t idx){this->idx.putNat(idx);return *this;}
+	inline VetNode& operator[](String idx){this->idx.putStr(idx);return *this;}
+};
+
+inline VetNode& VetPtr::operator[](size_t idx){
+	this->idx = idx;
+	return *((VetNode*) this);
+}
+
+inline VetNode& VetPtr::operator[](String idx){
+	return *((VetNode*) this);
+}
+
+
+
+
+struct ReaderVet : Ctx {
+	ReaderVet() : Ctx(){}
+	ReaderVet(Unit& unit) : Ctx(unit){}
+
+	inline VetPtr  row(){}
+	inline VetNode operator[](size_t idx){}
+	inline VetNode operator[](String idx){}
+
+	void init(){}
+	void next(){}
+	bool isOk(){}
+};
+
+struct WriterVet : VetPtr {
+	ReaderRaw& put();
+};
+
+
+
+
+struct Map : Ctx {
+	inline Map& operator[](size_t idx){}
+	inline Map& operator[](String idx){}
+};
+
+struct ReaderMap : Map {
+	void init(){}
+	void next(){}
+	bool isOk(){}
+};
+
+struct WriterMap : Map {
 };
