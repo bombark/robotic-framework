@@ -1,6 +1,8 @@
 #include "core.hpp"
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <vector>
 #include <pthread.h>
@@ -8,60 +10,103 @@
 using namespace std;
 
 
-struct FsFile : UnitBasic {
-	FILE* fd;
-	//struct stat buf_stat;
 
-	FsFile(){
+struct FsItemStream : UnitStream {
+	FILE* fd;
+
+	FsItemStream(){
 		this->fd = stdout;
 	}
 
-	FsFile(const char* name, const char* mode){
+	FsItemStream(const char* name, const char* mode){
 		this->fd = fopen(name,mode);
 	}
 
-	FsFile(FILE* fd){
+	FsItemStream(FILE* fd){
 		this->fd = fd;
 	}
 
-	void openRandom (Random& out){
+	void     stream_stat   (CtxStream* ctx){}
+	size_t   stream_get_raw (CtxStream* ctx, void* dst, size_t size){
+		return fread(dst,1,size,fd);
+	}
+	size_t   stream_put_raw (CtxStream* ctx, const void* src, size_t size){
+		return fwrite(src,1,size,fd);
 	}
 
-	void openStream (Stream& out){
+	uint64_t stream_get_nat (CtxStream* ctx){return 0;}
+	int64_t  stream_get_int (CtxStream* ctx){return 0;}
+	double   stream_get_flt (CtxStream* ctx){return 0;}
+	void     stream_get_str (CtxStream* ctx, String& dst){}
+
+	void     stream_put_nat (CtxStream* ctx, uint64_t val){
+		fwrite(&val,1,sizeof(val),fd);
+	}
+	void     stream_put_int (CtxStream* ctx, int64_t  val){
+		fwrite(&val,1,sizeof(val),fd);
+	}
+	void     stream_put_flt (CtxStream* ctx, double   val){
+		fwrite(&val,1,sizeof(val),fd);
+	}
+	void     stream_put_str (CtxStream* ctx, String   val){
+		fwrite(val.c_str(),1,val.size(),fd);
 	}
 
+	void stream_save      (CtxStream* ctx, uint8_t level){}
+	void stream_load_line (CtxStream* ctx){}
+};
 
-	uint64_t size(){}
 
-	void get_raw  (Ctx* ctx, void* dst, size_t sizebytes){
-		if ( ctx->isRandom() ){
-			this->seek(ctx->idx.getNat(0));
-		}
-		size_t size = fread(dst,1,sizebytes,this->fd);
-		if ( ctx->isStream() ){
-			//Stream* stream = (Stream*) ctx;
-			//stream->idx += size;
-		}
+struct FsItemRandom : FsItemStream {
+	FsItemRandom(){this->fd = NULL;}
+	FsItemRandom(const char* name, const char* mode) : FsItemStream(name,mode){}
+	FsItemRandom(FILE* fd) : FsItemStream(fd){}
+
+
+	void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode){
+		dst.idx = 0;
 	}
 
-	void get_str(Ctx* ctx, String&   dst){}
-
-	void put_raw  (Ctx* ctx, const void* src, size_t sizebytes){
-		if ( ctx->isRandom() ){
-			this->seek(ctx->idx.getNat(0));
-		}
-		size_t size = fwrite(src,1,sizebytes,this->fd);
-		if ( ctx->isStream() ){
-			//Stream* stream = (Stream*) ctx;
-			//stream->idx += size;
-		}
+	void random_open_random (CtxRandom* ctx, CtxRandom& dst, char mode){
+		dst.idx = 0;
 	}
 
-	//void write_cmd (Ctx* ctx, String cmd){}
+	size_t   random_get_raw (CtxRandom* ctx, void* dst, size_t size){
+		this->seek(ctx);
+		return fread(dst,1,size,this->fd);
+	}
 
-	void put_cmd(Ctx* stream, int type){}
+	size_t   random_put_raw (CtxRandom* ctx, const void* src, size_t size){
+		this->seek(ctx);
+		return fwrite(src,1,size,this->fd);
+	}
 
-	void seek(size_t pos){
+	uint64_t random_get_nat (CtxRandom* ctx){return 0;}
+	int64_t  random_get_int (CtxRandom* ctx){return 0;}
+	double   random_get_flt (CtxRandom* ctx){return 0;}
+	void     random_get_str (CtxRandom* ctx, String& dst){}
+
+	void random_put_nat  (CtxRandom* ctx, uint64_t val){}
+	void random_put_int  (CtxRandom* ctx, int64_t  val){}
+	void random_put_flt  (CtxRandom* ctx, double   val){}
+	void random_put_str  (CtxRandom* ctx, String   val){}
+
+	Stat random_stat   (CtxRandom* ctx){Stat(0);}
+
+	void random_erase  (CtxRandom* ctx, bool index){}
+
+	void random_resize (CtxRandom* ctx, size_t size){}
+	uint64_t random_size   (CtxRandom* ctx){return 1;}
+
+
+	uint64_t rawsize(){return 1;}
+
+	uint64_t size(){return 1;}
+
+
+
+	void seek(CtxRandom* ctx){
+		size_t pos = ctx->idx.getNat(0);
 		fseek(fd,pos,SEEK_SET);
 	}
 
@@ -73,432 +118,9 @@ struct FsFile : UnitBasic {
 
 
 
-struct TextDrv : UnitBasic {
-	Stream base;
-	char endv,endl;
-	bool first;
 
-	TextDrv(Unit& unit, char endv=',', char endl='\n'){
-		this->base.unit = &unit;
-		this->endv = endv;
-		this->endl = endl;
-		this->first = true;
-	}
 
-	void openRandom (Random& pack){}
-	void openStream (Stream& pack){}
-
-	void get_raw (Ctx* ctx, void* dst, size_t size){
-		base.getRaw(dst,size);
-	}
-
-
-
-
-	void put_raw (Ctx* ctx, const void* src, size_t size){
-		base.putRaw(src,size);
-	}
-
-	void put_nat(Ctx* ctx, uint64_t val){
-		this->putEndVar();
-		char buf[64];
-		sprintf(buf,"%lu",val);
-		base.putRaw(buf,strlen(buf));
-	}
-
-	void put_int(Ctx* ctx, int64_t val){
-		this->putEndVar();
-		char buf[64];
-		sprintf(buf,"%ld",val);
-		base.putRaw(buf,strlen(buf));
-	}
-
-	void put_flt(Ctx* ctx, double val){
-		this->putEndVar();
-		char buf[64];
-		sprintf(buf,"%lf",val);
-		base.putRaw(buf,strlen(buf));
-	}
-
-	void put_str(Ctx* ctx, String str){
-		this->putEndVar();
-		String val;
-		for (size_t i=0; i<str.size(); i++){
-			char c = str[i];
-			if ( c == endv ){
-				val += '\\';
-				val += endv;
-			} else if ( c == endl ){
-				val += '\\';
-				val += 'n';
-			} else {
-				val += c;
-			}
-		}
-		base.putStr(val);
-	}
-
-
-
-	String toStr(){}
-
-
-	void put_cmd(Ctx* stream, int type){
-		if ( type == 2 ){
-			base.put(endl);
-			this->first = true;
-		}
-	}
-
-
-	void putEndVar(){
-		if ( this->first ){
-			this->first = false;
-		} else {
-			base.put(endv);
-		}
-	}
-
-	void get_str(Ctx* ctx, String&   dst){}
-
-	uint64_t size(){}
-
-
-};
-
-
-
-
-
-struct CSV : Unit {
-	Stream stream;
-	String line;
-	vector<String> header;
-	char endcol,endrow;
-	bool is_first;
-
-	CSV(Unit& unit, String mode, char endcol=',', char endrow='\n'){
-		this->stream = unit;
-		this->endcol = endcol;
-		this->endrow = endrow;
-		this->is_first = true;
-		if ( mode == "r" ){
-			this->readHeader();
-		}
-	}
-
-	void openRandom (Random& pack){}
-	void openStream (Stream& pack){}
-	void get_raw(Ctx* ctx, void* src, size_t size){}
-	void get_nat(Ctx* ctx, uint64_t& dst){}
-	void get_int(Ctx* ctx, int64_t&  dst){}
-	void get_flt(Ctx* ctx, double&   dst){}
-	void get_str(Ctx* ctx, String&   dst){}
-
-	void put_raw(Ctx* ctx, const void* src, size_t size){}
-
-	void put_nat(Ctx* ctx, uint64_t val){
-		this->putEndVar();
-		this->stream.putNat(val);
-	}
-	void put_int(Ctx* ctx, int64_t  val){
-		this->putEndVar();
-		this->stream.putInt(val);
-	}
-	void put_flt(Ctx* ctx, double   val){
-		this->putEndVar();
-		this->stream.putInt(val);
-	}
-	void put_str(Ctx* ctx, String   str){
-		this->putEndVar();
-		this->stream.putStr(str);
-	}
-
-	void put_cmd(Ctx* ctx, int type){
-		this->stream.putRawAs<char>(endrow);
-		this->is_first = true;
-	}
-
-	uint64_t size(){}
-	String toStr(){}
-
-
-	void readHeader(){
-		String buf;
-		while ( true ){
-			char c = stream.getRawAs<char>();
-			if ( c == this->endrow ){
-				if ( buf.size() > 0 ){
-					header.push_back(buf);
-					buf.clear();
-				}
-				break;
-			} else if ( c == this->endcol ) {
-				header.push_back(buf);
-				buf.clear();
-			} else {
-				buf += c;
-			}
-		}
-	}
-
-	void readLine(){
-		while ( true ){
-			char c = stream.getRawAs<char>();
-			if ( c == this->endrow ){
-				break;
-			} else if ( c == this->endcol ) {
-
-			} else {
-				line += c;
-			}
-		}
-		cout << line << endl;
-	}
-
-	void putEndVar(){
-		if ( this->is_first ){
-			this->is_first = false;
-		} else {
-			//this->stream.putRawAs<char>(endcol);
-		}
-	}
-};
-
-
-
-
-
-#include "ros/ros.h"
-#include <geometry_msgs/Pose.h>
-
-
-
-struct RosPose : Unit {
-	String topic;
-	ros::Publisher  pub;
-	ros::Subscriber sub;
-	geometry_msgs::Pose buf;
-	pthread_mutex_t mutex;
-	Stream event;
-
-
-	RosPose(ros::NodeHandle& n, String topic, char mode){
-		this->topic = topic;
-		//if ( mode == 'w' ){
-		this->pub = n.advertise<geometry_msgs::Pose>(topic, 1000);
-		/*} else if ( mode == 'r' ){
-			this->sub = n.subscribe(topic, 1000, &RosPose::callback, this);
-			pthread_mutex_init(&this->mutex, NULL);
-			pthread_mutex_lock(&this->mutex);
-		}*/
-	}
-
-	RosPose(ros::NodeHandle& n, String topic, Stream& event){
-		this->topic = topic;
-		this->sub = n.subscribe(topic, 1000, &RosPose::callback, this);
-		pthread_mutex_init(&this->mutex, NULL);
-		pthread_mutex_lock(&this->mutex);
-		this->event = event;
-	}
-
-	void openRandom (Random& ctx){}
-
-	void openStream (Stream& ctx){
-		ctx.idx.putNat(0);
-	}
-
-	void get_raw(Ctx* ctx, void* src, size_t size){}
-
-	void get_nat(Ctx* ctx, uint64_t& dst){
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: dst = buf.position.x; break;
-			case 1: dst = buf.position.y; break;
-			case 2: dst = buf.position.z; break;
-			case 3: dst = buf.orientation.x; break;
-			case 4: dst = buf.orientation.y; break;
-			case 5: dst = buf.orientation.z; break;
-			case 6: dst = buf.orientation.w; break;
-		}
-	}
-
-	void get_int(Ctx* ctx, int64_t&  dst){
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: dst = buf.position.x; break;
-			case 1: dst = buf.position.y; break;
-			case 2: dst = buf.position.z; break;
-			case 3: dst = buf.orientation.x; break;
-			case 4: dst = buf.orientation.y; break;
-			case 5: dst = buf.orientation.z; break;
-			case 6: dst = buf.orientation.w; break;
-		}
-	}
-
-	void get_flt(Ctx* ctx, double&   dst){
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: dst = buf.position.x; break;
-			case 1: dst = buf.position.y; break;
-			case 2: dst = buf.position.z; break;
-			case 3: dst = buf.orientation.x; break;
-			case 4: dst = buf.orientation.y; break;
-			case 5: dst = buf.orientation.z; break;
-			case 6: dst = buf.orientation.w; break;
-		}
-	}
-
-	void get_str(Ctx* ctx, String&   dst){
-		double tmp;
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: tmp = buf.position.x; break;
-			case 1: tmp = buf.position.y; break;
-			case 2: tmp = buf.position.z; break;
-			case 3: tmp = buf.orientation.x; break;
-			case 4: tmp = buf.orientation.y; break;
-			case 5: tmp = buf.orientation.z; break;
-			case 6: tmp = buf.orientation.w; break;
-		}
-		char tmp_str[64]; sprintf(tmp_str,"%lf",tmp);
-		dst += tmp_str;
-	}
-
-	void put_raw(Ctx* ctx, const void* src, size_t size){}
-
-	void put_nat(Ctx* ctx, uint64_t val){
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: buf.position.x = val; break;
-			case 1: buf.position.y = val; break;
-			case 2: buf.position.z = val; break;
-			case 3: buf.orientation.x = val; break;
-			case 4: buf.orientation.y = val; break;
-			case 5: buf.orientation.z = val; break;
-			case 6: buf.orientation.w = val; break;
-		}
-	}
-
-	void put_int(Ctx* ctx, int64_t  val){
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: buf.position.x = val; break;
-			case 1: buf.position.y = val; break;
-			case 2: buf.position.z = val; break;
-			case 3: buf.orientation.x = val; break;
-			case 4: buf.orientation.y = val; break;
-			case 5: buf.orientation.z = val; break;
-			case 6: buf.orientation.w = val; break;
-		}
-	}
-
-	void put_flt(Ctx* ctx, double   val){
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: buf.position.x = val; break;
-			case 1: buf.position.y = val; break;
-			case 2: buf.position.z = val; break;
-			case 3: buf.orientation.x = val; break;
-			case 4: buf.orientation.y = val; break;
-			case 5: buf.orientation.z = val; break;
-			case 6: buf.orientation.w = val; break;
-		}
-	}
-
-	void put_str(Ctx* ctx, String   str){
-		double val = atof(str.c_str());
-		int idx = ctx->idx.getNat(0);
-		switch (idx){
-			case 0: buf.position.x = val; break;
-			case 1: buf.position.y = val; break;
-			case 2: buf.position.z = val; break;
-			case 3: buf.orientation.x = val; break;
-			case 4: buf.orientation.y = val; break;
-			case 5: buf.orientation.z = val; break;
-			case 6: buf.orientation.w = val; break;
-		}
-	}
-
-	void put_cmd(Ctx* stream, int type){
-		if ( type == 0 ){
-			pthread_mutex_lock(&this->mutex);
-		} else if ( type == 1 ){
-			stream->idx.atNat(0) += 1;
-		} else if ( type == 2 ){
-			stream->idx.atNat(0) = 0;
-			pub.publish(buf);
-		}
-	}
-
-	uint64_t size(){return 7;}
-	String toStr(){}
-
-
-	void callback(const geometry_msgs::Pose::ConstPtr& msg){
-		event.put(topic).put("recv").put(msg->position.x).endl();
-		this->buf.position    = msg->position;
-		this->buf.orientation = msg->orientation;
-		pthread_mutex_unlock(&this->mutex);
-	}
-};
-
-
-
-/*struct Translate : Unit {
-	Random data;
-	vector<size_t> src;
-	vector<size_t> dst;
-	Translate(){
-	}
-};*/
-
-
-
-
-
-
-struct RosCore : Unit {
-	String name;
-	ros::NodeHandle* node;
-	pthread_t thread;
-
-	RosCore(String name){
-		this->name = name;
-		int argc = 1;
-		const char *argv[] = {"cmd",NULL};
-		ros::init(argc, (char**)argv, "talker");
-		this->node = new ros::NodeHandle();
-
-		pthread_create(&thread, NULL, &thread_ros, this);
-	}
-
-
-	void openRandom (Random& pack){}
-	void openStream (Stream& pack){}
-	void get_raw(Ctx* ctx, void* src, size_t size){}
-	void get_nat(Ctx* ctx, uint64_t& dst){}
-	void get_int(Ctx* ctx, int64_t&  dst){}
-	void get_flt(Ctx* ctx, double&   dst){}
-	void get_str(Ctx* ctx, String&   dst){}
-	void put_raw(Ctx* ctx, const void* src, size_t size){}
-	void put_nat(Ctx* ctx, uint64_t val){}
-	void put_int(Ctx* ctx, int64_t  val){}
-	void put_flt(Ctx* ctx, double   val){}
-	void put_str(Ctx* ctx, String   str){}
-	void put_cmd(Ctx* ctx, int type){}
-	uint64_t size(){}
-	String toStr(){}
-
-	static void* thread_ros(void* self){
-		cout << "ros::spin\n";
-		ros::spin();
-	}
-};
-
-
-
-struct VetBufferRow : Unit {
+struct VetBufferRow : UnitVector {
 	String format;
 	std::vector<String> data;
 
@@ -506,11 +128,11 @@ struct VetBufferRow : Unit {
 		data.resize(10);
 	}
 
-	void openRandom (Random& ctx){
+	void openRandom (CtxRandom& ctx){
 		ctx.idx  = 0;
 	}
 
-	void openStream (Stream& ctx){
+	void openStream (CtxStream& ctx){
 		ctx.idx  = 0;
 	}
 
@@ -581,153 +203,6 @@ struct VetBufferRow : Unit {
 
 
 
-struct VetBufferUnit : Unit {
-	volatile size_t writer_id, reader_id;
-	pthread_mutex_t lock;
-	std::vector<VetBufferRow> data;
-
-
-	VetBufferUnit(){
-		reader_id = writer_id = 0;
-		pthread_mutex_init(&this->lock, NULL);
-		this->data.resize(10);
-	}
-
-	~VetBufferUnit(){
-		//pthread_mutex_destroy(&this->lock);
-	}
-
-	void openRandom (Random& pack){}
-	void openStream (Stream& ctx){
-		ctx.idx  = reader_id;
-		ctx.idx.base = 1;
-		ctx.data = new VetBufferRow();
-	}
-
-	void get_raw(Ctx* ctx, void* src, size_t size){}
-	void get_nat(Ctx* ctx, uint64_t& dst){}
-
-	void get_int(Ctx* ctx, int64_t&  dst){
-		//row.get_int(ctx,dst);
-	}
-
-	void get_flt(Ctx* ctx, double&   dst){}
-	void get_str(Ctx* ctx, String&   dst){}
-	void put_raw(Ctx* ctx, const void* src, size_t size){}
-	void put_nat(Ctx* ctx, uint64_t val){}
-	void put_int(Ctx* ctx, int64_t  val){
-		VetBufferRow* writer = (VetBufferRow*) ctx->data;
-		writer->put_int(ctx,val);
-	}
-	void put_flt(Ctx* ctx, double   val){}
-	void put_str(Ctx* ctx, String   str){}
-
-	void put_cmd(Ctx* ctx, int type){
-		if ( type == 0 ){
-			VetBufferRow* reader = (VetBufferRow*) ctx->data;
-			size_t idx = ctx->idx.getNat(-1);
-
-			while ( idx >= writer_id ){
-cout << "re " << idx << endl;
-				usleep(200000);
-			}
-
-			pthread_mutex_lock(&this->lock);
-			if ( idx >= reader_id ){
-cout << "ra " << idx << endl;
-				this->copyRow(reader,&this->data[bufId(idx)]);
-				ctx->idx.atNat(-1) += 1;
-			} else {
-cout << "ro " << idx << endl;
-				this->copyRow(reader,&this->data[bufId(reader_id)]);
-				ctx->idx.atNat(-1) = reader_id;
-			}
-			pthread_mutex_unlock(&this->lock);
-cout << reader->toStr() << endl;
-
-			ctx->idx.atNat(0)   = 0;
-		} else if ( type == 1 ){
-			ctx->idx.atNat(0) += 1;
-		} else if ( type == 2 ){
-			pthread_mutex_lock(&this->lock);
-			if ( writer_id >= this->data.size() ){
-				reader_id += 1;
-			}
-cout << "w " << reader_id << " " << writer_id << endl;
-			VetBufferRow* writer = (VetBufferRow*) ctx->data;
-			this->copyRow(&this->data[bufId(writer_id)],writer);
-			writer_id += 1;
-			ctx->idx = writer_id;
-			ctx->idx.putNat(0);
-			ctx->idx.base = 1;
-			pthread_mutex_unlock(&this->lock);
-		}
-
-
-
-	}
-
-	uint64_t size(){return 0;}
-	String toStr(){return "";}//row.toStr();}
-
-
-	void copyRow(VetBufferRow* dst, VetBufferRow* src){
-		size_t size = src->size();
-		dst->data.resize( size );
-		for ( size_t i=0; i<src->size(); i++ ){
-			dst->data[i] = src->data[i];
-		}
-		dst->format = src->format;
-	}
-
-	size_t bufId(size_t pos){
-		return pos%this->data.size();
-	}
-};
-
-
-
-
-
-
-
-
-struct Teste {
-	VetBufferUnit buf;
-	pthread_t pub, sub[3];
-
-	Teste(){
-		pthread_create(&pub, NULL, publisher, this);
-		pthread_create(&sub[0], NULL, subscriber, this);
-		pthread_create(&sub[1], NULL, subscriber, this);
-	}
-
-	~Teste(){
-		pthread_join(pub, NULL);
-	}
-
-	static void* publisher(void* arg){
-		Teste* self = (Teste*) arg;
-		Writer writer = self->buf;
-		for ( int i=0; i<20; i++ ){
-			writer.put(i).put(20).put(30).endl();
-			sleep(1);
-		}
-		return NULL;
-	}
-
-	static void* subscriber(void* arg){
-		Teste* self = (Teste*) arg;
-		Reader reader = self->buf;
-		for ( int i=0; i<20; i++){
-			reader.readRow();
-			usleep(500000);
-		}
-		return NULL;
-	}
-};
-
-
 
 struct ItemString : Unit {
 	String data;
@@ -743,6 +218,9 @@ struct ItemString : Unit {
 		for (size_t i=0; i<size; ++i,++dst){
 			*dst = data[idx+i];
 		}
+		if ( ctx->isStream() ){
+			ctx->idx.atNat(0) += size;
+		}
 	}
 
 	void put_raw(Ctx* ctx, const void* src, size_t size){}
@@ -750,8 +228,10 @@ struct ItemString : Unit {
 	uint64_t size(){return data.size();}
 
 
-	void openRandom (Random& pack){}
-	void openStream (Stream& pack){}
+	void random_open_random (CtxRandom* ctx, CtxRandom& dst, char mode){}
+	void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode){
+		dst.idx = 0;
+	}
 	void get_nat(Ctx* ctx, uint64_t& dst){dst = atoi(data.c_str());}
 	void get_int(Ctx* ctx, int64_t&  dst){dst = atoi(data.c_str());}
 	void get_flt(Ctx* ctx, double&   dst){dst = atof(data.c_str());}
@@ -783,13 +263,24 @@ struct ItemString : Unit {
 
 
 int main(int argc, char** argv){
-	ItemString tmp("felipe bombardelli");
+	FsItemStream file1(stdout);
+
+	FsItemRandom file2("data.txt","w+");
+
+	Raw raw = file2;
+	raw[0].put8("felipe bombardelli\n");
+	raw[10].put32(0x41424344);
+
+
+
+
+	/*ItemString tmp("felipe bombardelli");
 
 	ReaderRaw reader = tmp;
 
 	cout << reader.get() << endl;
 	cout << reader.get() << endl;
-	cout << reader.get() << endl;
+	cout << reader.get() << endl;*/
 
 	/*Raw name = tmp;
 	name(0,4).blank();
