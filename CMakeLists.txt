@@ -7,8 +7,8 @@ include_directories(/opt/ros/kinetic/include)
 link_directories(/opt/ros/kinetic/lib)
 
 
-#add_library(drv-basic SHARED "src/drv-basic.cpp")
-#target_link_libraries(drv-basic )
+#add_library(drv-filesystem SHARED "src/drv-filesystem.cpp")
+#target_link_libraries(drv-filesystem )
 
 
 add_executable(teste "src/main4.cpp")

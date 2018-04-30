@@ -1,7 +1,10 @@
 /*============================================================================*/
 
+#pragma once
+
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <iostream>
 #include <string.h>
 
@@ -16,8 +19,8 @@ using namespace std;
 
 struct Stat {
 	union {
-		char   type[2];
-		short  type16;
+		char    type[4];
+		int32_t type16;
 	};
 
 	Stat(){this->type16=0;}
@@ -28,23 +31,29 @@ struct Stat {
 	Stat& setMap(){type[0]='c';type[1]='m';return *this;}
 
 	Stat& setItem(){type[0]='i';return *this;}
+	Stat& setByte(){setItem();type[1]='b';return *this;}
 	Stat& setNat(){setItem();type[1]='n';return *this;}
 	Stat& setInt(){setItem();type[1]='i';return *this;}
 	Stat& setFlt(){setItem();type[1]='f';return *this;}
 	Stat& setStr(){setItem();type[1]='s';return *this;}
+	Stat& setRaw(){setItem();type[1]='r';return *this;}
 
 	bool isNull(){return type16==0;}
 	bool isPresent(){return type16!=0;}
+
+	bool isRandom(){return false;}
 
 	bool isColl(){return type[0]=='c';}
 	bool isVet(){return isColl() && type[1]=='v';}
 	bool isMap(){return isColl() && type[1]=='m';}
 
 	bool isItem(){return type[0]=='i';}
+	bool isByte(){return isItem() && type[1]=='b';}
 	bool isNat(){return isItem() && type[1]=='n';}
 	bool isInt(){return isItem() && type[1]=='i';}
 	bool isFlt(){return isItem() && type[1]=='f';}
 	bool isStr(){return isItem() && type[1]=='s';}
+	bool isRaw(){return isItem() && type[1]=='r';}
 
 	// Friend Function
 	friend std::ostream& operator<<(std::ostream& out, Stat stat){
@@ -52,6 +61,18 @@ struct Stat {
 		return out;
 	}
 };
+
+struct Error {
+	void putWarn(String msg){
+		std::cout << msg << endl;
+	}
+
+	void putFatal(String msg){
+		std::cout << msg << endl;
+		exit(1);
+	}
+};
+
 
 /*----------------------------------------------------------------------------*/
 
@@ -94,7 +115,7 @@ struct Args {
 		size_t idx = base + id;
 		switch ( format[idx] ){
 			case 'u': return nat64[idx];
-			//case 's': return str[id];
+			case 's': return atoi(str[id].c_str());
 			case 'd': return int64[idx];
 			case 'f': return flt64[idx];
 		}
@@ -124,6 +145,12 @@ struct Args {
 		nat64[0]  = val;
 	}
 
+	void operator=(String val){
+		base = 0; size = 1;
+		format[0] = 's';
+		str[0]  = val;
+	}
+
 	uint64_t nextNat(){
 		uint64_t val = this->getNat(0); this->next();
 		return val;
@@ -142,13 +169,15 @@ struct Unit;
 
 struct Ctx {
 	int    type;
-	Unit*  unit;
+	Unit*       unit;
+
 	union {
 		void*   data;
 		char    d_char;
 		int64_t d_int64;
 	};
 	Args   idx;
+	Error  err;
 
 	Ctx(){type = 0;}
 	Ctx(Unit* unit){this->unit = unit;}
@@ -180,29 +209,28 @@ struct CtxRandom : Ctx {
 /*============================================================================*/
 
 struct Unit {
-	virtual void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode)=0;
-	virtual void random_open_random (CtxRandom* ctx, CtxRandom& dst, char mode)=0;
+	// BASIC
+	virtual Stat  stat(){return Stat(0);}
 
-	virtual size_t   random_get_raw (CtxRandom* ctx, void* dst, size_t size)=0;
-	virtual size_t   random_put_raw (CtxRandom* ctx, const void* src, size_t size)=0;
+	// ITEM ======================
+	virtual uint64_t toNat()=0;
+	virtual int64_t  toInt()=0;
+	virtual double   toFlt()=0;
+	virtual String   toStr()=0;
 
-	virtual uint64_t random_get_nat (CtxRandom* ctx)=0;
-	virtual int64_t  random_get_int (CtxRandom* ctx)=0;
-	virtual double   random_get_flt (CtxRandom* ctx)=0;
-	virtual void     random_get_str (CtxRandom* ctx, String& dst)=0;
+	virtual void     setNat(uint64_t val)=0;
+	virtual void     setInt(int64_t  val)=0;
+	virtual void     setFlt(double   val)=0;
+	virtual void     setStr(String   val)=0;
 
-	virtual void random_put_nat  (CtxRandom* ctx, uint64_t val)=0;
-	virtual void random_put_int  (CtxRandom* ctx, int64_t  val)=0;
-	virtual void random_put_flt  (CtxRandom* ctx, double   val)=0;
-	virtual void random_put_str  (CtxRandom* ctx, String   val)=0;
+	virtual uint64_t size()=0;
 
-	virtual Stat random_stat   (CtxRandom* ctx)=0;
-	virtual void random_erase  (CtxRandom* ctx, bool   index)=0;
-	virtual void random_resize (CtxRandom* ctx, size_t size)=0;
-	virtual uint64_t random_size   (CtxRandom* ctx)=0;
-	//virtual void random_rawsize (CtxRandom* ctx)=0;
+	// Collection
+	//virtual void     root_open_stream (CtxStream& dst, char mode)=0; ->
 
-	virtual void stream_stat   (CtxStream* ctx)=0;
+	// STREAM ======================
+	virtual Stat     stream_stat (CtxStream* ctx)=0;
+	//virtual void     stream_open_stream (CtxStream& dst, char mode)=0;
 
 	virtual size_t   stream_get_raw (CtxStream* ctx, void* dst, size_t size)=0;
 	virtual size_t   stream_put_raw (CtxStream* ctx, const void* src, size_t size)=0;
@@ -212,15 +240,105 @@ struct Unit {
 	virtual double   stream_get_flt (CtxStream* ctx)=0;
 	virtual void     stream_get_str (CtxStream* ctx, String& dst)=0;
 
-	virtual void stream_put_nat (CtxStream* ctx, uint64_t val)=0;
-	virtual void stream_put_int (CtxStream* ctx, int64_t  val)=0;
-	virtual void stream_put_flt (CtxStream* ctx, double   val)=0;
-	virtual void stream_put_str (CtxStream* ctx, String   val)=0;
+	virtual void     stream_put_nat (CtxStream* ctx, uint64_t val)=0;
+	virtual void     stream_put_int (CtxStream* ctx, int64_t  val)=0;
+	virtual void     stream_put_flt (CtxStream* ctx, double   val)=0;
+	virtual void     stream_put_str (CtxStream* ctx, String   val)=0;
 
-	virtual void stream_save      (CtxStream* ctx, uint8_t level)=0;
-	virtual void stream_load_line (CtxStream* ctx)=0;
+	virtual void     stream_save      (CtxStream* ctx, uint8_t level)=0;
+	virtual void     stream_load_line (CtxStream* ctx)=0;
+
+	// RANDOM ======================
+	virtual Stat     random_stat   (CtxRandom* ctx)=0;
+	virtual void     random_erase  (CtxRandom* ctx, bool   index)=0;
+	virtual void     random_resize (CtxRandom* ctx, size_t size)=0;
+	virtual uint64_t random_size   (CtxRandom* ctx)=0;
+
+	virtual void random_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode)=0;
+	virtual void random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode)=0;
+
+	virtual uint64_t random_get_raw (CtxRandom* ctx, void* dst, size_t size)=0;
+	virtual uint64_t random_put_raw (CtxRandom* ctx, const void* src, size_t size)=0;
+
+	virtual uint64_t random_get_nat (CtxRandom* ctx)=0;
+	virtual int64_t  random_get_int (CtxRandom* ctx)=0;
+	virtual double   random_get_flt (CtxRandom* ctx)=0;
+	virtual void     random_get_str (CtxRandom* ctx, String& dst)=0;
+
+	virtual void     random_put_nat  (CtxRandom* ctx, uint64_t val)=0;
+	virtual void     random_put_int  (CtxRandom* ctx, int64_t  val)=0;
+	virtual void     random_put_flt  (CtxRandom* ctx, double   val)=0;
+	virtual void     random_put_str  (CtxRandom* ctx, String   val)=0;
+
+	virtual void     random_make      (CtxRandom* ctx, Stat   type)=0;
+	virtual void     random_make_item (CtxRandom* ctx, size_t size)=0;
+};
+
+/*
+
+struct UnitData {
+	virtual ~UnitData(){}
+	virtual Stat     stat()=0;
+
+	virtual Stat     stream_stat   (CtxStream* ctx)=0;
+
+	virtual void     root_open_stream   (CtxStream& dst, char mode)=0;
+	virtual void     stream_open_stream (CtxStream& dst, char mode)=0;
+
+	virtual size_t   stream_get_raw (CtxStream* ctx, void* dst, size_t size)=0;
+	virtual size_t   stream_put_raw (CtxStream* ctx, const void* src, size_t size)=0;
+
+	virtual uint64_t stream_get_nat (CtxStream* ctx)=0;
+	virtual int64_t  stream_get_int (CtxStream* ctx)=0;
+	virtual double   stream_get_flt (CtxStream* ctx)=0;
+	virtual void     stream_get_str (CtxStream* ctx, String& dst)=0;
+
+	virtual void     stream_put_nat (CtxStream* ctx, uint64_t val)=0;
+	virtual void     stream_put_int (CtxStream* ctx, int64_t  val)=0;
+	virtual void     stream_put_flt (CtxStream* ctx, double   val)=0;
+	virtual void     stream_put_str (CtxStream* ctx, String   val)=0;
+};
+
+struct UnitRandom : UnitStream {
+	virtual void     size()=0;
+	virtual void     root_open_random (CtxRandom& dst, char mode)=0;
+
+	virtual Stat     random_stat   (CtxRandom* ctx)=0;
+	virtual uint64_t random_size   (CtxRandom* ctx)=0;
+	virtual void     random_erase  (CtxRandom* ctx, bool   index)=0;
+};
+
+struct UnitCollection : UnitRandom {
+	virtual void random_resize      (CtxRandom* ctx, size_t size)=0;
+	virtual void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode)=0;
+	virtual void random_open_random (CtxRandom* ctx, CtxRandom& dst, char mode)=0;
+	virtual void random_make_item   (CtxRandom* ctx, size_t size);
+};
+
+struct UnitLinearColl : UnitCollection {
+	virtual uint64_t random_get_nat (CtxRandom* ctx)=0;
+	virtual int64_t  random_get_int (CtxRandom* ctx)=0;
+	virtual double   random_get_flt (CtxRandom* ctx)=0;
+	virtual void     random_get_str (CtxRandom* ctx, String& dst)=0;
+
+	virtual void random_put_nat (CtxRandom* ctx, uint64_t val)=0;
+	virtual void random_put_int (CtxRandom* ctx, int64_t  val)=0;
+	virtual void random_put_flt (CtxRandom* ctx, double   val)=0;
+	virtual void random_put_str (CtxRandom* ctx, String   val)=0;
+};
+
+struct UnitTable : UnitCollection {
+
+};
+
+struct UnitTreeColl : UnitCollection {
+	virtual void random_make_vet (CtxRandom* ctx);
+	virtual void random_make_map (CtxRandom* ctx);
+	virtual void random_make_obj (CtxRandom* ctx, String classe);
+};
 
 
+struct UnitItem : UnitRandom {
 	virtual uint64_t toNat()=0;
 	virtual int64_t  toInt()=0;
 	virtual double   toFlt()=0;
@@ -231,9 +349,12 @@ struct Unit {
 	virtual void setFlt(double   val)=0;
 	virtual void setStr(String   val)=0;
 
-	virtual uint64_t size()=0;
-	virtual uint64_t rawsize()=0;
+	virtual uint64_t random_get_raw (CtxRandom* ctx, void* dst, size_t size)=0;
+	virtual uint64_t random_put_raw (CtxRandom* ctx, const void* src, size_t size)=0;
 };
+
+
+*/
 
 /*----------------------------------------------------------------------------*/
 
@@ -442,6 +563,10 @@ struct Raw : CtxRandom {
 	Raw() : CtxRandom(){}
 	Raw(Unit& unit) : CtxRandom(unit){}
 
+	Raw(const CtxRandom& random){
+		this->unit = random.unit;
+	}
+
 	String toStr(){String val; this->unit->random_get_str(this,val); return val;}
 
 	inline RawNode& operator[](size_t idx){
@@ -579,14 +704,25 @@ struct Val : Ctx {
 
 struct ReaderVal : CtxStream {
 	ReaderVal() : CtxStream(){}
-	ReaderVal(Unit& unit) : CtxStream(unit){}
+	ReaderVal(Unit& unit) : CtxStream(unit){
+		unit.random_open_stream(NULL,*this,0);
+	}
+	ReaderVal(CtxRandom& ctx){
+cout << "opa\n";
+		this->unit = ctx.unit;
+		ctx.unit->random_open_stream(&ctx,*this,0);
+	}
 
-	/*ReaderVal& getNat(uint64_t& val){this->unit->stream_get_nat(this,val);return *this;}
-	ReaderVal& getInt(int64_t&  val){this->unit->stream_get_int(this,val);return *this;}
-	ReaderVal& getFlt(double&   val){this->unit->stream_get_flt(this,val);return *this;}
-	ReaderVal& getStr(String&   val){this->unit->stream_get_str(this,val);return *this;}*/
+	Stat       statRow(){return this->unit->stream_stat(this);}
+	size_t     sizeRow(){return 1;}
 
-	inline bool next(){}
+	ReaderVal& getNat(uint64_t& val){val = this->unit->stream_get_nat(this);return *this;}
+	ReaderVal& getInt(int64_t&  val){val = this->unit->stream_get_int(this);return *this;}
+	ReaderVal& getFlt(double&   val){val = this->unit->stream_get_flt(this);return *this;}
+	ReaderVal& getStr(String&   val){this->unit->stream_get_str(this,val);return *this;}
+
+	void next(){this->unit->stream_load_line(this);}
+	bool isOk(){return this->unit->stream_stat(this).isPresent();}
 };
 
 
@@ -613,7 +749,7 @@ struct WriterVal : CtxStream {
 	WriterVal& put(double  val){return this->putFlt(val);}
 	WriterVal& put(String  val){return this->putStr(val);}
 
-	inline void endl(){}
+	inline void endl(){this->unit->stream_save(this,1);}
 };
 
 /*----------------------------------------------------------------------------*/
@@ -720,22 +856,114 @@ struct WriterVet : CtxStream {
 /*============================================================================*/
 
 struct MapNode : CtxRandom {
-	inline MapNode& operator[](size_t idx){}
-	inline MapNode& operator[](String idx){}
+	inline Stat stat(){
+		return this->unit->random_stat(this);
+	}
+
+	inline uint64_t toNat(){return this->unit->random_get_nat(this);}
+	inline int64_t  toInt(){return this->unit->random_get_int(this);}
+	inline double   toFlt(){return this->unit->random_get_flt(this);}
+	inline String   toStr(){
+		String val; this->unit->random_get_str(this, val);
+		return val;
+	}
+
+	inline CtxRandom open(){
+		CtxRandom dst;
+		this->unit->random_open_random(this,dst,0);
+		return dst;
+	}
+
+
+	inline void mkitem(size_t size=0){this->unit->random_make_item(this,size);}
+	inline void mkmap(){this->unit->random_make(this,Stat().setMap());}
+	inline void mkvet(){this->unit->random_make(this,Stat().setVet());}
+
+	inline MapNode& operator[](size_t idx){
+		this->idx.putNat(idx);
+		return *this;
+	}
+
+	inline MapNode& operator[](String idx){
+		this->idx.putStr(idx);
+		return *this;
+	}
+
+	inline MapNode& operator=(char val){
+		this->unit->random_put_nat(this,val); return *this;
+	}
+	inline MapNode& operator=(uint8_t val){
+		this->unit->random_put_nat(this,val); return *this;
+	}
+	inline MapNode& operator=(uint16_t val){
+		this->unit->random_put_nat(this,val); return *this;
+	}
+	inline MapNode& operator=(uint32_t val){
+		this->unit->random_put_nat(this,val); return *this;
+	}
+	inline MapNode& operator=(uint64_t val){
+		this->unit->random_put_nat(this,val); return *this;
+	}
+	inline MapNode& operator=(int8_t val){
+		this->unit->random_put_int(this,val); return *this;
+	}
+	inline MapNode& operator=(int16_t val){
+		this->unit->random_put_int(this,val); return *this;
+	}
+	inline MapNode& operator=(int32_t val){
+		this->unit->random_put_int(this,val); return *this;
+	}
+	inline MapNode& operator=(int64_t val){
+		this->unit->random_put_int(this,val); return *this;
+	}
+	inline MapNode& operator=(float val){
+		this->unit->random_put_flt(this,val); return *this;
+	}
+	inline MapNode& operator=(double val){
+		this->unit->random_put_flt(this,val); return *this;
+	}
+	inline MapNode& operator=(String val){
+		this->unit->random_put_str(this,val); return *this;
+	}
 };
 
 struct MapPtr : CtxRandom {
-	inline MapNode& operator[](size_t idx){}
-	inline MapNode& operator[](String idx){}
+	MapPtr() : CtxRandom(){}
+	MapPtr(Unit& unit) : CtxRandom(unit){}
+	MapPtr(Unit* unit) : CtxRandom(unit){}
+
+	MapPtr(const MapNode& node) : CtxRandom(node.unit){
+		node.unit->random_open_random( (CtxRandom*)&node,*this,0 );
+	}
+
+	Stat stat(){
+		if ( this->idx.size == 0 ){
+			return this->unit->stat();
+		} else {
+			return this->unit->random_stat(this);
+		}
+	}
+
+	inline MapNode& operator[](size_t idx){
+		this->idx = idx;
+		return *((MapNode*)this);
+	}
+
+	inline MapNode& operator[](String idx){
+		this->idx.clear();
+		this->idx.putStr(idx);
+		return *((MapNode*)this);
+	}
 };
 
 struct ReaderMap : CtxStream {
 	void init(){}
-	void next(){}
-	bool isOk(){}
+	void next(){this->unit->stream_load_line(this);}
+	bool isOk(){return this->unit->stream_stat(this).isPresent();}
 };
 
 struct WriterMap : CtxStream {
+	void next(){this->unit->stream_save(this,1);}
 };
 
 /*----------------------------------------------------------------------------*/
@@ -754,8 +982,8 @@ struct WriterMap : CtxStream {
 
 
 struct UnitStream : Unit {
-	void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode){}
-	void random_open_random (CtxRandom* ctx, CtxRandom& dst, char mode){}
+	void random_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode)=0;
+	void random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode){}
 
 	size_t   random_get_raw (CtxRandom* ctx, void* dst, size_t size){}
 	size_t   random_put_raw (CtxRandom* ctx, const void* src, size_t size){}
@@ -775,6 +1003,9 @@ struct UnitStream : Unit {
 	void random_resize (CtxRandom* ctx, size_t size){}
 	uint64_t random_size   (CtxRandom* ctx){return 0;}
 
+	virtual void random_make      (CtxRandom* ctx, Stat   type){}
+	virtual void random_make_item (CtxRandom* ctx, size_t size){}
+
 
 	uint64_t toNat(){return 0;}
 	int64_t  toInt(){return 0;}
@@ -786,13 +1017,13 @@ struct UnitStream : Unit {
 	void setFlt(double   val){}
 	void setStr(String   val){}
 
-	uint64_t rawsize(){return 0;}
+	//uint64_t rawsize(){return 0;}
 	uint64_t size(){return 0;}
 };
 
 
 
-struct UnitColl : Unit {
+struct UnitCollection : Unit {
 	uint64_t toNat(){return 0;}
 	int64_t  toInt(){return 0;}
 	double   toFlt(){return 0;}
@@ -805,69 +1036,83 @@ struct UnitColl : Unit {
 };
 
 
-struct UnitVector : UnitColl {
-	void stream_stat      (CtxStream* ctx){}
+struct UnitVector : UnitCollection {
+	Stat stream_stat      (CtxStream* ctx){return Stat(0);}
 
 	void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode){
-		if ( mode == 0 ){
+		//if ( mode == 0 ){
 			dst.idx = 0;
-		}// else if ( mode == 1)
+		//} else if ( mode == 1)
 		//	dst.idx = this->unit->size();
 	}
 
 	size_t   stream_get_raw (CtxStream* ctx, void* dst, size_t size){
-		size_t read = this->random_get_raw( (Random*)ctx,dst,size );
+		size_t read = this->random_get_raw( (CtxRandom*)ctx,dst,size );
 		ctx->idx.atNat(0) += read;
 	}
 
 	size_t   stream_put_raw (CtxStream* ctx, const void* src, size_t size){
-		size_t wrote = this->random_put_raw( (Random*)ctx,src,size );
+		size_t wrote = this->random_put_raw( (CtxRandom*)ctx,src,size );
 		ctx->idx.atNat(0) += wrote;
 	}
 
 	uint64_t stream_get_nat (CtxStream* ctx){
-		uint64_t res = this->random_get_nat( (Random*)ctx );
+		uint64_t res = this->random_get_nat( (CtxRandom*)ctx );
 		ctx->idx.atNat(0) += 1;
 		return res;
 	}
 
 	int64_t  stream_get_int (CtxStream* ctx){
-		int64_t res = this->random_get_int( (Random*)ctx );
+		int64_t res = this->random_get_int( (CtxRandom*)ctx );
 		ctx->idx.atNat(0) += 1;
 		return res;
 	}
 
 	double   stream_get_flt (CtxStream* ctx){
-		double res = this->random_get_flt( (Random*)ctx );
+		double res = this->random_get_flt( (CtxRandom*)ctx );
 		ctx->idx.atNat(0) += 1;
 		return res;
 	}
 
 	void     stream_get_str (CtxStream* ctx, String& dst){
-		this->random_get_str( (Random*)ctx, dst );
+		this->random_get_str( (CtxRandom*)ctx, dst );
 		ctx->idx.atNat(0) += 1;
 	}
 
 	void stream_put_nat  (CtxStream* ctx, uint64_t val){
-		this->random_put_nat( (Random*)ctx, val );
+		this->random_put_nat( (CtxRandom*)ctx, val );
 		ctx->idx.atNat(0) += 1;
 	}
 
 	void stream_put_int  (CtxStream* ctx, int64_t  val){
-		this->random_put_int( (Random*)ctx, val );
+		this->random_put_int( (CtxRandom*)ctx, val );
 		ctx->idx.atNat(0) += 1;
 	}
 
 	void stream_put_flt  (CtxStream* ctx, double   val){
-		this->random_put_flt( (Random*)ctx, val );
+		this->random_put_flt( (CtxRandom*)ctx, val );
 		ctx->idx.atNat(0) += 1;
 	}
 
 	void stream_put_str  (CtxStream* ctx, String   val){
-		this->random_put_str( (Random*)ctx, val );
+		this->random_put_str( (CtxRandom*)ctx, val );
 		ctx->idx.atNat(0) += 1;
 	}
 };
 
+
+struct UnitTree : UnitCollection {
+
+	// Macros
+	inline void mkmap(String idx){
+		MapPtr ctx = this;
+		ctx[idx].mkmap();
+	}
+
+	inline void mkvet(String idx){
+		MapPtr ctx = this;
+		ctx[idx].mkvet();
+	}
+};
 
 /*----------------------------------------------------------------------------*/

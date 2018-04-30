@@ -11,265 +11,51 @@ using namespace std;
 
 
 
-struct FsItemStream : UnitStream {
-	FILE* fd;
 
-	FsItemStream(){
-		this->fd = stdout;
-	}
-
-	FsItemStream(const char* name, const char* mode){
-		this->fd = fopen(name,mode);
-	}
-
-	FsItemStream(FILE* fd){
-		this->fd = fd;
-	}
-
-	void     stream_stat   (CtxStream* ctx){}
-	size_t   stream_get_raw (CtxStream* ctx, void* dst, size_t size){
-		return fread(dst,1,size,fd);
-	}
-	size_t   stream_put_raw (CtxStream* ctx, const void* src, size_t size){
-		return fwrite(src,1,size,fd);
-	}
-
-	uint64_t stream_get_nat (CtxStream* ctx){return 0;}
-	int64_t  stream_get_int (CtxStream* ctx){return 0;}
-	double   stream_get_flt (CtxStream* ctx){return 0;}
-	void     stream_get_str (CtxStream* ctx, String& dst){}
-
-	void     stream_put_nat (CtxStream* ctx, uint64_t val){
-		fwrite(&val,1,sizeof(val),fd);
-	}
-	void     stream_put_int (CtxStream* ctx, int64_t  val){
-		fwrite(&val,1,sizeof(val),fd);
-	}
-	void     stream_put_flt (CtxStream* ctx, double   val){
-		fwrite(&val,1,sizeof(val),fd);
-	}
-	void     stream_put_str (CtxStream* ctx, String   val){
-		fwrite(val.c_str(),1,val.size(),fd);
-	}
-
-	void stream_save      (CtxStream* ctx, uint8_t level){}
-	void stream_load_line (CtxStream* ctx){}
-};
-
-
-struct FsItemRandom : FsItemStream {
-	FsItemRandom(){this->fd = NULL;}
-	FsItemRandom(const char* name, const char* mode) : FsItemStream(name,mode){}
-	FsItemRandom(FILE* fd) : FsItemStream(fd){}
-
-
-	void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode){
-		dst.idx = 0;
-	}
-
-	void random_open_random (CtxRandom* ctx, CtxRandom& dst, char mode){
-		dst.idx = 0;
-	}
-
-	size_t   random_get_raw (CtxRandom* ctx, void* dst, size_t size){
-		this->seek(ctx);
-		return fread(dst,1,size,this->fd);
-	}
-
-	size_t   random_put_raw (CtxRandom* ctx, const void* src, size_t size){
-		this->seek(ctx);
-		return fwrite(src,1,size,this->fd);
-	}
-
-	uint64_t random_get_nat (CtxRandom* ctx){return 0;}
-	int64_t  random_get_int (CtxRandom* ctx){return 0;}
-	double   random_get_flt (CtxRandom* ctx){return 0;}
-	void     random_get_str (CtxRandom* ctx, String& dst){}
-
-	void random_put_nat  (CtxRandom* ctx, uint64_t val){}
-	void random_put_int  (CtxRandom* ctx, int64_t  val){}
-	void random_put_flt  (CtxRandom* ctx, double   val){}
-	void random_put_str  (CtxRandom* ctx, String   val){}
-
-	Stat random_stat   (CtxRandom* ctx){Stat(0);}
-
-	void random_erase  (CtxRandom* ctx, bool index){}
-
-	void random_resize (CtxRandom* ctx, size_t size){}
-	uint64_t random_size   (CtxRandom* ctx){return 1;}
-
-
-	uint64_t rawsize(){return 1;}
-
-	uint64_t size(){return 1;}
-
-
-
-	void seek(CtxRandom* ctx){
-		size_t pos = ctx->idx.getNat(0);
-		fseek(fd,pos,SEEK_SET);
-	}
-
-	String toStr(){
-		return "";
-	}
-};
+#include "drv-filesystem.cpp"
 
 
 
 
 
-
-struct VetBufferRow : UnitVector {
-	String format;
-	std::vector<String> data;
-
-	VetBufferRow(){
-		data.resize(10);
-	}
-
-	void openRandom (CtxRandom& ctx){
-		ctx.idx  = 0;
-	}
-
-	void openStream (CtxStream& ctx){
-		ctx.idx  = 0;
-	}
-
-	void get_raw(Ctx* ctx, void* src, size_t size){}
-
-	void get_nat(Ctx* ctx, uint64_t& dst){
-		size_t idx = ctx->idx.getNat(0);
-		dst = atoi(data[idx].c_str());
-	}
-
-	void get_int(Ctx* ctx, int64_t&  dst){
-		size_t idx = ctx->idx.getNat(0);
-		dst = atoi(data[idx].c_str());
-	}
-
-	void get_flt(Ctx* ctx, double&   dst){
-		size_t idx = ctx->idx.getNat(0);
-		dst = atof(data[idx].c_str());
-	}
-
-	void get_str(Ctx* ctx, String&   dst){
-		size_t idx = ctx->idx.getNat(0);
-		dst = data[idx];
-	}
-
-	void put_raw(Ctx* ctx, const void* src, size_t size){}
-
-	void put_nat(Ctx* ctx, uint64_t val){
-		size_t idx = ctx->idx.getNat(0);
-		char buf[64]; sprintf(buf,"%lu",val);
-		data[idx] = buf;
-		format[idx] = 'n';
-	}
-
-	void put_int(Ctx* ctx, int64_t  val){
-		size_t idx = ctx->idx.getNat(0);
-		char buf[64]; sprintf(buf,"%ld",val);
-		data[idx] = buf;
-		format[idx] = 'd';
-	}
-
-	void put_flt(Ctx* ctx, double   val){
-		size_t idx = ctx->idx.getNat(0);
-		char buf[64]; sprintf(buf,"%lf",val);
-		data[idx]   = buf;
-		format[idx] = 'f';
-	}
-
-	void put_str(Ctx* ctx, String   val){
-		size_t idx  = ctx->idx.getNat(0);
-		data[idx]   = val;
-		format[idx] = 's';
-	}
-
-	void put_cmd(Ctx* ctx, int type){}
-	uint64_t size(){return data.size();}
-
-	String toStr(){
-		String res;
-		for ( int i=0; i<data.size(); i++){
-			res += data[i];
-			res += ';';
-		}
-		return res;
-	}
-
-};
-
-
-
-
-struct ItemString : Unit {
-	String data;
-
-	ItemString(String data){this->data = data;}
-
-	void get_raw(Ctx* ctx, void* _dst, size_t size){
-		size_t idx = ctx->idx.getNat(0);
-		size_t rest = this->data.size() - idx;
-		if ( rest < size )
-			size = rest;
-		char* dst  = (char*) _dst;
-		for (size_t i=0; i<size; ++i,++dst){
-			*dst = data[idx+i];
-		}
-		if ( ctx->isStream() ){
-			ctx->idx.atNat(0) += size;
+void list(MapNode& unit){
+	for ( ReaderVal reader=unit; reader.isOk(); reader.next() ){
+		if ( reader.statRow().isItem() ){
+			cout << reader.idx.getStr(0) << endl;
+		} else {
+			String idx = reader.idx.getStr(0);
+			if ( idx[0] == '.' ) continue;
+			cout << "a " << idx << endl;
 		}
 	}
-
-	void put_raw(Ctx* ctx, const void* src, size_t size){}
-
-	uint64_t size(){return data.size();}
-
-
-	void random_open_random (CtxRandom* ctx, CtxRandom& dst, char mode){}
-	void random_open_stream (CtxRandom* ctx, CtxStream& dst, char mode){
-		dst.idx = 0;
-	}
-	void get_nat(Ctx* ctx, uint64_t& dst){dst = atoi(data.c_str());}
-	void get_int(Ctx* ctx, int64_t&  dst){dst = atoi(data.c_str());}
-	void get_flt(Ctx* ctx, double&   dst){dst = atof(data.c_str());}
-	void get_str(Ctx* ctx, String&   dst){dst = data;}
-
-	void put_nat(Ctx* ctx, uint64_t val){
-		char buf[64]; sprintf(buf,"%lu",val);
-		data = buf;
-	}
-	void put_int(Ctx* ctx, int64_t  val){
-		char buf[64]; sprintf(buf,"%ld",val);
-		data = buf;
-	}
-	void put_flt(Ctx* ctx, double   val){
-		char buf[64]; sprintf(buf,"%lf",val);
-		data = buf;
-	}
-	void put_str(Ctx* ctx, String   val){
-		data = val;
-	}
-
-	void put_cmd(Ctx* ctx, int type){}
-	String toStr(){return data;}
-};
-
-
-
-
+}
 
 
 int main(int argc, char** argv){
-	FsItemStream file1(stdout);
+	FsSystem fs(".");
+	MapPtr map = fs;
 
+	FsDirStream dir(".");
+	list(map["data"]);
+
+
+
+
+	//map["data"]["teste"].mkitem(1024);
+	//Raw raw = map["data"]["teste"].open();
+
+	//MapPtr data = map["data"];
+	//cout << map["data/teste"].toStr() << endl;
+
+	//Raw raw = map["data/teste"].open();
+	//raw[0].put8("felipe gustavo bombardelli\n");
+
+
+
+	/*FsItemStream file1(stdout);
 	FsItemRandom file2("data.txt","w+");
-
 	Raw raw = file2;
-	raw[0].put8("felipe bombardelli\n");
-	raw[10].put32(0x41424344);
+	raw[10].put32(0x41424344);*/
 
 
 
@@ -401,3 +187,164 @@ int main(int argc, char** argv){
 
 	//cout << out.getIdx() << endl;*/
 }
+
+
+
+
+
+struct VetBufferRow : UnitVector {
+	String format;
+	std::vector<String> data;
+
+	VetBufferRow(){
+		data.resize(10);
+	}
+
+	void random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode){
+		dst.idx  = 0;
+	}
+
+	void get_raw(CtxRandom* ctx, void* src, size_t size){}
+
+	uint64_t random_get_nat(CtxRandom* ctx){
+		size_t idx = ctx->idx.getNat(0);
+		return atoi(data[idx].c_str());
+	}
+
+	int64_t random_get_int(CtxRandom* ctx){
+		size_t idx = ctx->idx.getNat(0);
+		return atoi(data[idx].c_str());
+	}
+
+	double random_get_flt(CtxRandom* ctx){
+		size_t idx = ctx->idx.getNat(0);
+		return atof(data[idx].c_str());
+	}
+
+	void random_get_str(CtxRandom* ctx, String&   dst){
+		size_t idx = ctx->idx.getNat(0);
+		dst += data[idx];
+	}
+
+	uint64_t random_put_raw(CtxRandom* ctx, const void* src, size_t size){}
+
+	void random_put_nat(CtxRandom* ctx, uint64_t val){
+		size_t idx = ctx->idx.getNat(0);
+		char buf[64]; sprintf(buf,"%lu",val);
+		data[idx] = buf;
+		format[idx] = 'n';
+	}
+
+	void random_put_int(CtxRandom* ctx, int64_t  val){
+		size_t idx = ctx->idx.getNat(0);
+		char buf[64]; sprintf(buf,"%ld",val);
+		data[idx] = buf;
+		format[idx] = 'd';
+	}
+
+	void random_put_flt(CtxRandom* ctx, double   val){
+		size_t idx = ctx->idx.getNat(0);
+		char buf[64]; sprintf(buf,"%lf",val);
+		data[idx]   = buf;
+		format[idx] = 'f';
+	}
+
+	void random_put_str(CtxRandom* ctx, String   val){
+		size_t idx  = ctx->idx.getNat(0);
+		data[idx]   = val;
+		format[idx] = 's';
+	}
+
+	void random_put_cmd(CtxRandom* ctx, int type){}
+	uint64_t size(){return data.size();}
+
+
+	uint64_t random_get_raw (CtxRandom* ctx, void* dst, size_t size){}
+	Stat random_stat   (CtxRandom* ctx){}
+	void random_erase  (CtxRandom* ctx, bool   index){}
+	void random_resize (CtxRandom* ctx, size_t size){}
+	uint64_t random_size   (CtxRandom* ctx){}
+	void stream_save      (CtxStream* ctx, uint8_t level){}
+	void stream_load_line (CtxStream* ctx){}
+	uint64_t rawsize(){}
+
+
+	String toStr(){
+		String res;
+		for ( int i=0; i<data.size(); i++){
+			res += data[i];
+			res += ';';
+		}
+		return res;
+	}
+
+};
+
+
+
+
+struct ItemString : Unit {
+	String data;
+
+	ItemString(String data){this->data = data;}
+
+	void get_raw(Ctx* ctx, void* _dst, size_t size){
+		size_t idx = ctx->idx.getNat(0);
+		size_t rest = this->data.size() - idx;
+		if ( rest < size )
+			size = rest;
+		char* dst  = (char*) _dst;
+		for (size_t i=0; i<size; ++i,++dst){
+			*dst = data[idx+i];
+		}
+		if ( ctx->isStream() ){
+			ctx->idx.atNat(0) += size;
+		}
+	}
+
+	void put_raw(Ctx* ctx, const void* src, size_t size){}
+
+	uint64_t size(){return data.size();}
+
+
+	void random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode){}
+	void random_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
+		dst.idx = 0;
+	}
+	void get_nat(Ctx* ctx, uint64_t& dst){dst = atoi(data.c_str());}
+	void get_int(Ctx* ctx, int64_t&  dst){dst = atoi(data.c_str());}
+	void get_flt(Ctx* ctx, double&   dst){dst = atof(data.c_str());}
+	void get_str(Ctx* ctx, String&   dst){dst = data;}
+
+	void random_put_nat(CtxRandom* ctx, uint64_t val){
+		char buf[64]; sprintf(buf,"%lu",val);
+		data = buf;
+	}
+	void random_put_int(CtxRandom* ctx, int64_t  val){
+		char buf[64]; sprintf(buf,"%ld",val);
+		data = buf;
+	}
+	void random_put_flt(CtxRandom* ctx, double   val){
+		char buf[64]; sprintf(buf,"%lf",val);
+		data = buf;
+	}
+	void random_put_str(CtxRandom* ctx, String   val){
+		data = val;
+	}
+
+	void put_cmd(Ctx* ctx, int type){}
+	String toStr(){return data;}
+
+	size_t   random_get_raw (CtxRandom* ctx, void* dst, size_t size){}
+	size_t   random_put_raw (CtxRandom* ctx, const void* src, size_t size){}
+	void     random_get_str (CtxRandom* ctx, String& dst){}
+
+	Stat random_stat   (CtxRandom* ctx){}
+	void random_erase  (CtxRandom* ctx, bool   index){}
+	void random_resize (CtxRandom* ctx, size_t size){}
+	uint64_t random_size   (CtxRandom* ctx){}
+	void stream_save      (CtxStream* ctx, uint8_t level){}
+	void stream_load_line (CtxStream* ctx){}
+	uint64_t rawsize(){}
+
+};
