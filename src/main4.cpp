@@ -12,33 +12,42 @@ using namespace std;
 
 
 
-#include "drv-filesystem.cpp"
+#include "drv-yaml.cpp"
 
 
 
 
 
-void list(MapNode& unit){
-	for ( ReaderVal reader=unit; reader.isOk(); reader.next() ){
-		if ( reader.statRow().isItem() ){
+void lista(MapPtr node, int level=0){
+	ReaderVal reader=node;
+	while ( reader.read() ){
+		Stat stat_row = reader.statRow();
+		if ( stat_row.isItem() ){
+			for (int i=0;i<level;i++)
+				cout << "  ";
+			cout << reader.idx.getStr(0) << ": \n";
+		} else if ( stat_row.isVet() ){
+			for (int i=0;i<level;i++)
+				cout << "  ";
 			cout << reader.idx.getStr(0) << endl;
-		} else {
+		} else if ( stat_row.isMap() ){
+			for (int i=0;i<level;i++)
+				cout << "  ";
 			String idx = reader.idx.getStr(0);
-			if ( idx[0] == '.' ) continue;
 			cout << "a " << idx << endl;
+			//if ( level >= 1 ) break;
+			lista( node[idx], level+1 );
 		}
 	}
 }
 
 
+
+
 int main(int argc, char** argv){
-	FsSystem fs(".");
-	MapPtr map = fs;
+	YamlNode fs("{name: felipe, score: 1000, vet: [20,30,40], pai: {name: clovis, score: 20, vet: [10,20,30] } }");
 
-	FsDirStream dir(".");
-	list(map["data"]);
-
-
+	lista(fs,0);
 
 
 	//map["data"]["teste"].mkitem(1024);
