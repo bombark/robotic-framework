@@ -11,7 +11,7 @@ using namespace std;
 
 
 
-
+#include "drv-filesystem.cpp"
 #include "drv-yaml.cpp"
 
 
@@ -19,9 +19,9 @@ using namespace std;
 
 
 void lista(MapPtr node, int level=0){
-	ReaderVal reader=node;
-	while ( reader.read() ){
-		Stat stat_row = reader.statRow();
+	//Reader reader=node;
+	//while ( reader.read() ){
+		/*Stat stat_row = reader.statRow();
 		if ( stat_row.isItem() ){
 			for (int i=0;i<level;i++)
 				cout << "  ";
@@ -37,17 +37,51 @@ void lista(MapPtr node, int level=0){
 			cout << "a " << idx << endl;
 			//if ( level >= 1 ) break;
 			lista( node[idx], level+1 );
-		}
-	}
+		}*/
+	//}
 }
 
 
 
 
 int main(int argc, char** argv){
-	YamlNode fs("{name: felipe, score: 1000, vet: [20,30,40], pai: {name: clovis, score: 20, vet: [10,20,30] } }");
+	FsItemRandom file("data.txt","r");
 
-	lista(fs,0);
+	YamlNode data( file.toStr() );
+	//cout << data["data"].stat() << endl;
+
+	VetPtr vet = data["data"];
+
+	Iterator it = data.begin();
+	for (; it.isOk(); ++it ){
+		Stat stat = it.stat();
+		if ( stat.isItem() ){
+			cout << it.key() << ": " << it.toStr() << endl;
+		} else if ( stat.isVet() ){
+			cout << it.key() << ": \n";
+			VetPtr vet = it.toVet();
+			vet.log();
+			//cout << vet.size() << " " << vet[0].toStr() << endl;
+		} else if ( stat.isMap() ){
+			cout << it.key() << ":n \n";
+		}
+	}
+
+
+	/*file.log();
+	data.log();
+	cout << data["datdddda"][0].stat() << endl;
+	cout << data["vetor"][0].stat() << endl;
+	cout << data["data"].stat() << endl;
+	cout << data["data"][0].stat() << endl;
+	cout << data["data"][0]["score"].stat() << endl;*/
+	//cout <<  << endl;
+
+	//CtxRandom a = vet[0];
+	//cout << a.toStr() << endl;
+
+
+	//lista(fs,0);
 
 
 	//map["data"]["teste"].mkitem(1024);
@@ -306,9 +340,9 @@ struct ItemString : Unit {
 		for (size_t i=0; i<size; ++i,++dst){
 			*dst = data[idx+i];
 		}
-		if ( ctx->isStream() ){
+		/*if ( ctx->isStream() ){
 			ctx->idx.atNat(0) += size;
-		}
+		}*/
 	}
 
 	void put_raw(Ctx* ctx, const void* src, size_t size){}

@@ -68,7 +68,12 @@ struct FsItemRandom : FsItemStream {
 		if ( fd ){ fclose(fd); }
 	}
 
-	void random_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
+	String classe(){return "Fs/File";}
+
+	void root_open_stream (CtxStream& dst, char mode){}
+	void root_open_random (CtxRandom& dst, char mode){}
+
+	void node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
 		dst.idx = 0;
 	}
 
@@ -144,7 +149,7 @@ struct FsItemRandom : FsItemStream {
 };
 
 
-struct FsDirStreamData {
+struct FsDirStreamData : StreamData {
 	DIR*   dir;
 	bool   is_ok;
 
@@ -152,56 +157,35 @@ struct FsDirStreamData {
 		this->dir = opendir (url.c_str());
 		this->is_ok = ( this->dir ) ? true : false;
 	}
-};
 
+	Stat stat(){return Stat(0);}
 
-struct FsDirStream : UnitStream {
-	String root;
-
-	FsDirStream(String root){
-		this->root = root;
+	void first(CtxStream& ctx){
+		this->next(ctx);
 	}
 
-	Stat     stream_stat_line   (CtxStream* ctx);
+	void prev(CtxStream& ctx){}
 
-	size_t   stream_get_raw (CtxStream* ctx, void* dst, size_t size){return 0;}
-	size_t   stream_put_raw (CtxStream* ctx, const void* src, size_t size){return 0;}
-
-	void     stream_save_line (CtxStream* ctx, uint8_t level){}
-	void     stream_load_line (CtxStream* ctx){
-		FsDirStreamData* buf = (FsDirStreamData*) ctx->data;
-		if ( buf == NULL ) return;
+	void next(CtxStream& ctx){
+		if ( this->dir == NULL ) return;
 		String name;
 		do {
-			struct dirent *entry = readdir(buf->dir);
+			struct dirent *entry = readdir(this->dir);
 			if ( !entry ){
-				buf->is_ok = false;
+				this->is_ok = false;
 				return;
 			}
 			name = entry->d_name;
 		} while ( name == "." || name == ".." );
-		ctx->idx = name;
+		ctx.idx = name;
 	}
-	CtxRandom stream_get_line  (CtxStream* ctx){}
 
+	bool isOk(){
+		return this->is_ok;
+	}
 
-	uint64_t stream_get_nat (CtxStream* ctx){}
-	int64_t  stream_get_int (CtxStream* ctx){}
-	double   stream_get_flt (CtxStream* ctx){}
-	void     stream_get_str (CtxStream* ctx, String& dst){}
-
-	void     stream_put_nat (CtxStream* ctx, uint64_t val){}
-	void     stream_put_int (CtxStream* ctx, int64_t  val){}
-	void     stream_put_flt (CtxStream* ctx, double   val){}
-	void     stream_put_str (CtxStream* ctx, String   val){}
-
-
-	void     stream_save      (CtxStream* ctx, uint8_t level){}
-
-
-
-	void  random_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
-		dst.data = (void*) new FsDirStreamData(root);
+	CtxRandom val_get_vet (CtxStream& ctx){
+		return CtxRandom();
 	}
 };
 
@@ -221,9 +205,22 @@ struct FsSystem : UnitTree {
 		}
 	}
 
-	Stat    stat(){return Stat().setMap();}
+	Stat      stat(){return Stat().setMap();}
+	uint64_t  size(){return 0;}
 
-	uint64_t size(){return 0;}
+	void root_open_stream (CtxStream& dst, char mode){}
+
+	void node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
+		String url = this->ctx2url((CtxRandom*)ctx);
+//LOG(url.c_str());
+		Stat node_stat = this->getStat(url);
+		if ( node_stat.isColl() ){
+			dst.stream_data = new FsDirStreamData(url);
+		} else {
+			dst.stream_data = NULL;
+		}
+	}
+
 
 	Stat      stream_stat_line (CtxStream* ctx){}
 	void      stream_save_line (CtxStream* ctx, uint8_t level){}
@@ -252,18 +249,7 @@ struct FsSystem : UnitTree {
 	void     random_resize (CtxRandom* ctx, size_t size){}
 	uint64_t random_size   (CtxRandom* ctx){}
 
-	void random_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
-		String url = this->ctx2url((CtxRandom*)ctx);
-//LOG(url.c_str());
-		Stat node_stat = this->getStat(url);
-		if ( node_stat.isColl() ){
-			dst.unit = new FsDirStream(url);
-			dst.init();
-		} else {
-cout << "err\n";
-			dst.unit = NULL;
-		}
-	}
+
 
 	void random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode){
 		String url = this->ctx2url((CtxRandom*)ctx);
@@ -372,11 +358,11 @@ protected:
 };
 
 
-Stat  FsDirStream::stream_stat_line   (CtxStream* ctx){
+/*Stat  FsDirStreamData::stat   (CtxStream* ctx){
 	FsDirStreamData* buf = (FsDirStreamData*) ctx->data;
 	if ( !buf->is_ok )
 		return Stat(0);
 	FsSystem fs(this->root);
 	return fs.random_stat( (CtxRandom*)ctx );
 	return Stat(0);
-}
+}*/

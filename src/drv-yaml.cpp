@@ -2,16 +2,23 @@
 #include <yaml-cpp/yaml.h>
 
 
-struct NodeIteratorData {
+struct YamlIterator : StreamData {
 	YAML::const_iterator it;
 	YAML::const_iterator end;
 
-	NodeIteratorData(YAML::Node node){
+	YamlIterator(YAML::Node node){
 		this->it  = node.begin();
 		this->end = node.end();
 	}
 
-	Stat stat(){
+	String   val_get_str (CtxStream& ctx){
+		//if ( this->it->second.IsScalar() )
+		return this->it->second.as<String>();
+	}
+
+	CtxRandom val_get_vet (CtxStream& ctx);
+
+	Stat itr_stat(CtxStream& ctx){
 		YAML::Node n = this->it->second;
 		if ( n.IsScalar() )
 			return Stat().setItem();
@@ -21,12 +28,21 @@ struct NodeIteratorData {
 			return Stat().setMap();
 	}
 
-	void next(CtxStream* ctx){
-		++it;
-		ctx->idx = this->isOk() ? it->first.as<String>() : "";
+	void itr_begin(CtxStream& ctx){
+		ctx.idx = this->itr_is_ok(ctx) ? it->first.as<String>() : "";
 	}
 
-	bool isOk(){
+	void itr_prev(CtxStream& ctx){
+		//--it;
+		ctx.idx = this->itr_is_ok(ctx) ? it->first.as<String>() : "";
+	}
+
+	void itr_next(CtxStream& ctx){
+		++it;
+		ctx.idx = this->itr_is_ok(ctx) ? it->first.as<String>() : "";
+	}
+
+	bool itr_is_ok(CtxStream& ctx){
 		return this->it != this->end;
 	}
 };
@@ -40,56 +56,32 @@ struct YamlNode : UnitTree {
 		this->node = YAML::Load(text);
 	}
 
-	YamlNode(YAML::Node node){
+	YamlNode(const YAML::Node node){
 		this->node = node;
 	}
 
-	Stat     stat(){return Stat().setMap();}
+	String classe(){return "Yaml/Node";}
+
+	Stat     stat(){
+		if ( this->node.IsNull() )
+			return Stat(0);
+		if ( this->node.IsScalar() )
+			return Stat().setItem();
+		if ( this->node.IsMap() )
+			return Stat().setMap();
+		if ( this->node.IsSequence() )
+			return Stat().setVet();
+		return Stat(0);
+	}
 
 	uint64_t size(){return node.size();}
 
-	Stat      stream_stat_line (CtxStream* ctx){
-		NodeIteratorData* data = (NodeIteratorData*) ctx->data;
-		return data->stat();
-	}
 
-	void      stream_save_line (CtxStream* ctx, uint8_t level){}
-
-	void      stream_load_line (CtxStream* ctx){
-		NodeIteratorData* data = (NodeIteratorData*) ctx->data;
-		data->next(ctx);
-	}
-
-	CtxRandom stream_get_line  (CtxStream* ctx){}
-
-	size_t   stream_get_raw (CtxStream* ctx, void* dst, size_t size){}
-	size_t   stream_put_raw (CtxStream* ctx, const void* src, size_t size){}
-	uint64_t stream_get_nat (CtxStream* ctx){}
-	int64_t  stream_get_int (CtxStream* ctx){}
-	double   stream_get_flt (CtxStream* ctx){}
-	void     stream_get_str (CtxStream* ctx, String& dst){}
-	void     stream_put_nat (CtxStream* ctx, uint64_t val){}
-	void     stream_put_int (CtxStream* ctx, int64_t  val){}
-	void     stream_put_flt (CtxStream* ctx, double   val){}
-	void     stream_put_str (CtxStream* ctx, String   val){}
 
 
 	Stat     random_stat   (CtxRandom* ctx){
-		String field = ctx->idx.getStr(0);
-		YAML::Node node = this->node[field];
-		if ( node ){
-			if ( node.IsScalar() )
-				return Stat().setItem();
-			if ( node.IsSequence() )
-				return Stat().setVet();
-			if ( node.IsMap() )
-				return Stat().setMap();
-			//if ( node.isStr() ){
-			//	return Stat().setStr();
-			//}
-		} else {
-			return Stat(0);
-		}
+		YAML::Node coll; String field;
+		return this->findNode(*ctx, coll, field);
 	}
 
 
@@ -110,17 +102,21 @@ struct YamlNode : UnitTree {
 		return this->node[field].size();
 	}
 
-	void random_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
-		if ( ctx == NULL ){
-			dst.data = new NodeIteratorData(node);
+	void root_open_stream (CtxStream& dst, char mode){
+		dst.stream_data = new YamlIterator(this->node);
+	}
+
+	void node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
+		if ( ctx->idx.size == 0 ){
+			dst.stream_data = new YamlIterator(this->node);
 		} else {
-			if ( ctx->idx.size == 0 ){
-				dst.data = new NodeIteratorData(this->node);
-			} else {
-				String field = ctx->idx.getStr(0);
-				dst.data = new NodeIteratorData(this->node[field]);
-			}
+			String field = ctx->idx.getStr(0);
+			dst.stream_data = new YamlIterator(this->node[field]);
 		}
+	}
+
+	void root_open_random(CtxRandom& dst, char mode){
+		dst.unit = new YamlNode( this->node );
 	}
 
 	void random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode){
@@ -132,28 +128,44 @@ struct YamlNode : UnitTree {
 	uint64_t random_put_raw (CtxRandom* ctx, const void* src, size_t size){return 0;}
 
 	uint64_t random_get_nat (CtxRandom* ctx){
-		String field = ctx->idx.getStr(0);
-		return this->node[field].as<uint64_t>();
+		YAML::Node coll; String field;
+		Stat type = this->findNode(*ctx, coll, field);
+		if ( type.isItem() ){
+			return coll[field].as<uint64_t>();
+		}
+		return 0;
 	}
 
 	int64_t  random_get_int (CtxRandom* ctx){
-		String field = ctx->idx.getStr(0);
-		return this->node[field].as<int64_t>();
+		YAML::Node coll; String field;
+		Stat type = this->findNode(*ctx, coll, field);
+		if ( type.isItem() ){
+			return coll[field].as<int64_t>();
+		}
+		return 0;
 	}
 
 	double   random_get_flt (CtxRandom* ctx){
-		String field = ctx->idx.getStr(0);
-		return this->node[field].as<double>();
+		YAML::Node coll; String field;
+		Stat type = this->findNode(*ctx, coll, field);
+		if ( type.isItem() ){
+			return coll[field].as<double>();
+		}
+		return 0;
 	}
 
 	void     random_get_str (CtxRandom* ctx, String& dst){
-		String field = ctx->idx.getStr(0);
-		dst += this->node[field].as<String>();
+		YAML::Node coll; String field;
+		Stat type = this->findNode(*ctx, coll, field);
+		if ( type.isItem() ){
+			dst += coll[field].as<String>();
+		} else if ( type.isColl() ){
+			cout << coll << endl;
+		}
 	}
 
 	void     random_put_nat (CtxRandom* ctx, uint64_t val){
-		String field = ctx->idx.getStr(0);
-		this->node[field] = val;
+
 	}
 	void     random_put_int (CtxRandom* ctx, int64_t  val){
 		String field = ctx->idx.getStr(0);
@@ -174,4 +186,67 @@ struct YamlNode : UnitTree {
 	void     random_make_item (CtxRandom* ctx, size_t size){
 	}
 
+
+protected:
+	Stat findNode( const CtxRandom& ctx, YAML::Node& out, String& out_field){
+		return this->findNodeRec(ctx,this->node,0,out,out_field);
+	}
+
+	Stat findNodeRec( const CtxRandom& ctx, YAML::Node last, size_t i, YAML::Node& out, String& out_field){
+		if ( ctx.idx.size == 0 ){
+			out = this->node;
+			out_field.clear();
+			return Stat().setColl();
+		}
+
+		if ( i >= ctx.idx.size ){
+			return Stat(0);
+		}
+
+		YAML::Node cur;
+		if ( last.IsSequence() ){
+			uint64_t field    = ctx.idx.getNat(i);
+			cur = last[field];
+		} else if ( last.IsMap() ){
+			String field    = ctx.idx.getStr(i);
+			cur = last[field];
+		}
+
+		if ( cur ){
+			if ( cur.IsScalar() ){
+				if ( ctx.idx.size < i )
+					return Stat(0);
+				out = last;
+				out_field = ctx.idx.getStr(i);
+				return Stat().setItem();
+			} else if ( cur.IsSequence() ){
+				if ( i+1 == ctx.idx.size ){
+					out = cur; out_field.clear();
+					return Stat().setVet();
+				} else {
+					return this->findNodeRec(ctx,cur,i+1,out,out_field);
+				}
+			}  else if ( cur.IsMap() ){
+				if ( i+1 == ctx.idx.size ){
+					out = cur; out_field.clear();
+					return Stat().setMap();
+				} else {
+					return this->findNodeRec(ctx,cur,i+1,out,out_field);
+				}
+			}
+			return Stat(0);
+		}
+		out = last;
+		out_field = ctx.idx.getStr(i);
+		return Stat(0);
+	}
 };
+
+
+
+
+CtxRandom YamlIterator::val_get_vet (CtxStream& ctx){
+	CtxRandom res = new YamlNode(this->it->second);
+	res.log();
+	return res;
+}
