@@ -109,16 +109,6 @@ struct Args {
 	}
 
 
-	void putNat(uint64_t val){
-		nat64[size]  = val;
-		format[size++] = 'u';
-	}
-
-	void putStr(String val){
-		str[size] = val;
-		format[size++] = 's';
-	}
-
 	uint64_t& atNat(int id){return nat64[base+id];}
 
 	uint64_t getNat(int id) const {
@@ -148,6 +138,26 @@ struct Args {
 		}
 		return "";
 	}
+
+	uint64_t& atNat (int id) const {return this->atPathNat(base+id); }
+	uint64_t  getNat(int id) const {return this->getPathNat(base+id);}
+	String    getStr(int id) const {return this->getPathStr(base+id);}
+	void      putNat(uint64_t val){this->atPathNat(val);}
+	void      putStr(String val){this->atPathStr(val);}
+
+
+	uint64_t& atPathNat(int id) const {}
+	uint64_t  getPathNat(int id) const {}
+	String    getPathStr(int id) const {}
+	void      putPathNat(uint64_t val){nat64[size]=val;format[size++]='u';}
+	void      putPathStr(String val){str[size] = val;format[size++] = 's';}
+
+	uint64_t& atBaseNat(int id) const {}
+	uint64_t  getBaseNat(int id) const {}
+	String    getBaseStr(int id) const {}
+	void      putBaseNat(){}
+	void      putBaseStr(){}
+
 
 	void operator=(uint64_t val){
 		base = 0; size = 1;
