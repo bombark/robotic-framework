@@ -47,10 +47,17 @@ void lista(MapPtr node, int level=0){
 int main(int argc, char** argv){
 	FsItemRandom file("data.txt","r");
 
-	YamlNode data( file.toStr() );
+
+	YamlNode data( "{name: felipe, score: 100}" );
+
+	data.log();
+	CtxRandom ctx = data;
+	ctx["name"].log();
+	//cout << ctx["name"].stat() << endl;
+
 	//cout << data["data"].stat() << endl;
 
-	VetPtr vet = data["data"];
+	/*VetPtr vet = data["data"];
 
 	Iterator it = data.begin();
 	for (; it.isOk(); ++it ){
@@ -65,7 +72,7 @@ int main(int argc, char** argv){
 		} else if ( stat.isMap() ){
 			cout << it.key() << ":n \n";
 		}
-	}
+	}*/
 
 
 	/*file.log();

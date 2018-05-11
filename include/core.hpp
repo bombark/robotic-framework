@@ -91,7 +91,6 @@ struct Error {
 /*============================================================================*/
 
 struct Args {
-	short base;
 	short size;
 	char  format[4];
 	union {
@@ -104,79 +103,48 @@ struct Args {
 	Args(){this->clear();}
 
 	void clear(){
-		this->base = 0;
 		this->size = 0;
 	}
 
-
-	uint64_t& atNat(int id){return nat64[base+id];}
-
-	uint64_t getNat(int id) const {
-		size_t idx = base + id;
-		switch ( format[idx] ){
-			case 'u': return nat64[idx];
+	uint64_t& atNat(int id) const {}
+	uint64_t  getNat(int id) const {
+		switch ( format[id] ){
+			case 'u': return nat64[id];
 			case 's': return atoi(str[id].c_str());
-			case 'd': return int64[idx];
-			case 'f': return flt64[idx];
+			case 'd': return int64[id];
+			case 'f': return flt64[id];
 		}
 		return 0;
 	}
-
-	String   getStr(const int id) const {
-		size_t idx = base + id;
-		if ( format[idx] == 's' )
-			return str[idx];
-		else if ( format[idx] == 'u' ){
-			char buf[64]; sprintf(buf,"%lu",nat64[idx]);
+	String    getStr(int id) const {
+		if ( format[id] == 's' )
+			return str[id];
+		else if ( format[id] == 'u' ){
+			char buf[64]; sprintf(buf,"%lu",nat64[id]);
 			return buf;
 		} else if ( format[id] == 'd' ){
-			char buf[64]; sprintf(buf,"%ld",int64[idx]);
+			char buf[64]; sprintf(buf,"%ld",int64[id]);
 			return buf;
 		}  else if ( format[id] == 'f' ){
-			char buf[64]; sprintf(buf,"%lf",flt64[idx]);
+			char buf[64]; sprintf(buf,"%lf",flt64[id]);
 			return buf;
 		}
 		return "";
 	}
-
-	uint64_t& atNat (int id) const {return this->atPathNat(base+id); }
-	uint64_t  getNat(int id) const {return this->getPathNat(base+id);}
-	String    getStr(int id) const {return this->getPathStr(base+id);}
-	void      putNat(uint64_t val){this->atPathNat(val);}
-	void      putStr(String val){this->atPathStr(val);}
-
-
-	uint64_t& atPathNat(int id) const {}
-	uint64_t  getPathNat(int id) const {}
-	String    getPathStr(int id) const {}
-	void      putPathNat(uint64_t val){nat64[size]=val;format[size++]='u';}
-	void      putPathStr(String val){str[size] = val;format[size++] = 's';}
-
-	uint64_t& atBaseNat(int id) const {}
-	uint64_t  getBaseNat(int id) const {}
-	String    getBaseStr(int id) const {}
-	void      putBaseNat(){}
-	void      putBaseStr(){}
-
+	void      putNat(uint64_t val){nat64[size]=val;format[size++]='u';}
+	void      putStr(String val){str[size] = val;format[size++] = 's';}
 
 	void operator=(uint64_t val){
-		base = 0; size = 1;
+		size = 1;
 		format[0] = 'u';
 		nat64[0]  = val;
 	}
 
 	void operator=(String val){
-		base = 0; size = 1;
+		size = 1;
 		format[0] = 's';
 		str[0]  = val;
 	}
-
-	uint64_t nextNat(){
-		uint64_t val = this->getNat(0); this->next();
-		return val;
-	}
-
-	void next(){this->base += 1;}
 };
 
 /*----------------------------------------------------------------------------*/
@@ -290,6 +258,7 @@ struct Ctx {
 		char    d_char;
 		int64_t d_int64;
 	};
+	Args   base;
 	Args   idx;
 	Error  err;
 
@@ -306,6 +275,14 @@ struct Ctx {
 		this->unit = unit.usesUnit();
 		this->data = NULL;
 	}
+	Ctx(const Ctx& ctx){
+		if ( ctx.unit )
+			this->unit = ctx.unit->usesUnit();
+		this->data = NULL;
+		this->idx  = ctx.idx;
+		this->base = ctx.base;
+	}
+
 	~Ctx(){
 		if ( this->unit ){
 			this->unit->freeUnit();
@@ -316,6 +293,8 @@ struct Ctx {
 	bool isNull()   {return unit==NULL;}
 	bool isStream() {return type==1;}
 	bool isRandom() {return type==2;}
+
+	size_t getIdxSize(){return this->base.size + this->idx.size;}
 };
 
 
@@ -406,7 +385,7 @@ struct CtxRandom : Ctx {
 	CtxRandom(Unit& unit, size_t idx) : Ctx(unit){this->idx = idx;}
 	CtxRandom(Unit& unit, String idx) : Ctx(unit){this->idx = idx;}
 
-	CtxRandom(CtxRandom* ctx) : Ctx(unit){}
+	CtxRandom(const CtxRandom& ctx) : Ctx(ctx){}
 
 	Stat stat(){
 		return this->unit->random_stat(this);
@@ -442,17 +421,32 @@ struct CtxRandom : Ctx {
 
 
 	void log(){
-		if ( this->idx.size == 0 ){
-			Stat stat = this->unit->stat();
-			printf("Ctx{unit: %p, type: %X}\n",this->unit,stat.type16);
+		if ( this->getIdxSize() == 0 ){
+			printf("Ctx{unit: %p",this->unit);
+			if ( this->unit ){
+				Stat stat = this->unit->stat();
+				printf(", type: %s", stat.type);
+			}
+			printf("}\n");
 		} else {
+			String base_str = base.getStr(0);
+			for (int i=1;i<base.size; i++){
+				base_str += '/';
+				base_str += base.getStr(i);
+			}
+
 			String idx_str = idx.getStr(0);
 			for (int i=1;i<idx.size; i++){
 				idx_str += '/';
 				idx_str += idx.getStr(i);
 			}
-			Stat stat = this->stat();
-			printf("Ctx{unit: %p, index: %s, type: %s}\n",this->unit,idx_str.c_str(), stat.type);
+
+			printf("Ctx{unit: %p, index: %s#%s",this->unit,base_str.c_str(), idx_str.c_str());
+			if ( this->unit ){
+				Stat stat = this->stat();
+				printf(", type: %s", stat.type);
+			}
+			printf("}\n");
 			//const char* _idx = this->idx.getStr(0).c_str();
 			//printf("Ctx{unit: %p, stream: {key:%s} }\n",this->unit,_idx);
 		}
