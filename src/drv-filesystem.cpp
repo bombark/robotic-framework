@@ -9,7 +9,7 @@
 
 
 
-
+/*
 struct FsItemStream : UnitStream {
 	FILE* fd;
 
@@ -56,21 +56,37 @@ struct FsItemStream : UnitStream {
 
 	void stream_save      (CtxStream* ctx, uint8_t level){}
 	void stream_load_line (CtxStream* ctx){}
-};
+};*/
 
 
-struct FsItemRandom : FsItemStream {
-	FsItemRandom(){this->fd = NULL;}
-	FsItemRandom(const char* name, const char* mode) : FsItemStream(name,mode){}
-	FsItemRandom(FILE* fd) : FsItemStream(fd){}
 
-	~FsItemRandom(){
+struct FsItem : UnitItem {
+	FILE* fd;
+
+	FsItem() : UnitItem() {this->fd = NULL;}
+	FsItem(const char* name, const char* mode) : UnitItem(){
+		this->fd = fopen(name,mode);
+	}
+	FsItem(FILE* fd) : UnitItem(){}
+
+	~FsItem(){
 		if ( fd ){ fclose(fd); }
 	}
 
 	String classe(){return "Fs/File";}
 
-	void root_open_stream (CtxStream& dst, char mode){}
+	uint64_t toNat(){}
+	int64_t  toInt(){}
+	double   toFlt(){}
+	void     setNat(uint64_t val){}
+	void     setInt(int64_t  val){}
+	void     setFlt(double   val){}
+	void     setStr(String   val){}
+
+
+
+	void root_open_stream (CtxStream& dst, char mode);
+
 	void root_open_random (CtxRandom& dst, char mode){}
 
 	void node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
@@ -147,6 +163,46 @@ struct FsItemRandom : FsItemStream {
 		return res;
 	}
 };
+
+struct FsItemStream : StreamData {
+	
+	size_t raw_get (CtxStream& ctx, char* dst, size_t size){
+		FsItem* unit = (FsItem*) ctx.unit;
+		return fread(dst,1,size,unit->fd);
+	}
+
+	size_t raw_put (CtxStream& ctx, char* dst, size_t size){
+		FsItem* unit = (FsItem*) ctx.unit;
+		return fwrite(dst,1,size,unit->fd);
+	}
+
+	void  base_update(CtxStream& ctx){
+		FsItem* unit = (FsItem*) ctx.unit;
+		ctx.base = ftell(unit->fd);
+	}
+
+	uint64_t  val_get_nat (CtxStream& ctx){}
+	int64_t   val_get_int (CtxStream& ctx){}
+	double    val_get_flt (CtxStream& ctx){}
+	String    val_get_str (CtxStream& ctx){}
+	CtxRandom val_get_vet (CtxStream& ctx){}
+};
+
+
+
+void FsItem::root_open_stream (CtxStream& dst, char mode){
+	dst.stream_data = new FsItemStream();
+	dst.base = 0;
+}
+
+
+
+
+
+
+
+
+
 
 
 struct FsDirStreamData : StreamData {
@@ -255,7 +311,7 @@ struct FsSystem : UnitTree {
 		String url = this->ctx2url((CtxRandom*)ctx);
 		Stat node_stat = this->getStat(url);
 		if ( node_stat.isItem() ){
-			dst.unit = new FsItemRandom(url.c_str(),"r+");
+			dst.unit = new FsItem(url.c_str(),"r+");
 		} else if ( node_stat.isColl() ){
 			dst.unit = new FsSystem(url);
 			/*dst.unit = this;
@@ -272,7 +328,7 @@ struct FsSystem : UnitTree {
 		String url = this->ctx2url(ctx);
 		Stat node_stat = this->getStat(url);
 		if ( node_stat.isItem() ){
-			FsItemRandom file(url.c_str(),"r");
+			FsItem file(url.c_str(),"r");
 			return file.toNat();
 		}
 	}
@@ -281,7 +337,7 @@ struct FsSystem : UnitTree {
 		String url = this->ctx2url(ctx);
 		Stat node_stat = this->getStat(url);
 		if ( node_stat.isItem() ){
-			FsItemRandom file(url.c_str(),"r");
+			FsItem file(url.c_str(),"r");
 			return file.toInt();
 		}
 	}
@@ -290,7 +346,7 @@ struct FsSystem : UnitTree {
 		String url = this->ctx2url(ctx);
 		Stat node_stat = this->getStat(url);
 		if ( node_stat.isItem() ){
-			FsItemRandom file(url.c_str(),"r");
+			FsItem file(url.c_str(),"r");
 			return file.toFlt();
 		}
 	}
@@ -299,7 +355,7 @@ struct FsSystem : UnitTree {
 		String url = this->ctx2url(ctx);
 		Stat node_stat = this->getStat(url);
 		if ( node_stat.isItem() ){
-			FsItemRandom file(url.c_str(),"r");
+			FsItem file(url.c_str(),"r");
 			dst += file.toStr();
 		}
 	}

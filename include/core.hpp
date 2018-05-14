@@ -313,6 +313,7 @@ struct StreamData {
 
 	virtual size_t raw_get (CtxStream& ctx, char* dst, size_t size){}
 	virtual size_t raw_put (CtxStream& ctx, char* dst, size_t size){}
+	virtual void   base_update(CtxStream& ctx){}
 
 	virtual uint64_t  val_get_nat (CtxStream& ctx){}
 	virtual int64_t   val_get_int (CtxStream& ctx){}
@@ -372,7 +373,8 @@ struct CtxStream : Ctx {
 		if ( !this->stream_data )
 			printf("Ctx{unit: %p, stream: nil}\n",this->unit);
 		else {
-			const char* _idx = this->idx.getStr(0).c_str();
+			this->stream_data->base_update(*this);
+			const char* _idx = this->base.getStr(0).c_str();
 			printf("Ctx{unit: %p, stream: {key:%s} }\n",this->unit,_idx);
 		}
 	}
@@ -638,6 +640,12 @@ struct Raw : RandomUnit {
 struct ReaderRaw : CtxStream {
 	ReaderRaw() : CtxStream(){}
 	ReaderRaw(Unit& unit) : CtxStream(unit){}
+	ReaderRaw(const CtxStream& ctx) : CtxStream(ctx){}
+
+	char getc(){
+		char c; this->stream_data->raw_get(*this,&c,1);
+		return c;
+	}
 };
 
 
@@ -890,6 +898,13 @@ typedef MapPtr TreePtr;
 
 
 /*============================================================================*/
+
+struct UnitItem : Unit {
+	CtxStream toStream(){
+		CtxStream res(this); this->root_open_stream(res,0);
+		return res;
+	}
+};
 
 
 struct UnitStream : Unit {

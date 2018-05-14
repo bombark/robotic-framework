@@ -45,14 +45,25 @@ void lista(MapPtr node, int level=0){
 
 
 int main(int argc, char** argv){
-	FsItemRandom file("data.txt","r");
+	FsItem file("data.txt","r");
+
+	cout << file.toStr() << endl;
+
+	ReaderRaw stream = file.toStream();
+	cout << stream.getc() << endl;
+	cout << stream.getc() << endl;
+	cout << stream.getc() << endl;
+
+	stream.log();
 
 
-	YamlNode data( "{name: felipe, score: 100}" );
+
+	/*YamlNode data( file );
 
 	data.log();
 	CtxRandom ctx = data;
-	ctx["name"].log();
+	ctx.base.putStr("data");
+	ctx["name"].log();*/
 	//cout << ctx["name"].stat() << endl;
 
 	//cout << data["data"].stat() << endl;
