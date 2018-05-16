@@ -1,3 +1,5 @@
+/*============================================================================*/
+
 #include "core.hpp"
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +9,7 @@
 #include <string.h>
 #include <dirent.h>
 
-
+/*----------------------------------------------------------------------------*/
 
 /*
 struct FsItemStream : UnitStream {
@@ -58,7 +60,7 @@ struct FsItemStream : UnitStream {
 	void stream_load_line (CtxStream* ctx){}
 };*/
 
-
+/*============================================================================*/
 
 struct FsItem : UnitItem {
 	FILE* fd;
@@ -164,27 +166,42 @@ struct FsItem : UnitItem {
 	}
 };
 
+
+
 struct FsItemStream : StreamData {
-	
 	size_t raw_get (CtxStream& ctx, char* dst, size_t size){
 		FsItem* unit = (FsItem*) ctx.unit;
 		return fread(dst,1,size,unit->fd);
 	}
-
 	size_t raw_put (CtxStream& ctx, char* dst, size_t size){
 		FsItem* unit = (FsItem*) ctx.unit;
 		return fwrite(dst,1,size,unit->fd);
 	}
-
 	void  base_update(CtxStream& ctx){
 		FsItem* unit = (FsItem*) ctx.unit;
 		ctx.base = ftell(unit->fd);
 	}
-
-	uint64_t  val_get_nat (CtxStream& ctx){}
-	int64_t   val_get_int (CtxStream& ctx){}
-	double    val_get_flt (CtxStream& ctx){}
-	String    val_get_str (CtxStream& ctx){}
+	uint64_t  val_get_nat (CtxStream& ctx){
+		FsItem* unit = (FsItem*) ctx.unit;
+		uint64_t res; fscanf(unit->fd,"%lu",&res);
+		return res;
+	}
+	int64_t   val_get_int (CtxStream& ctx){
+		FsItem* unit = (FsItem*) ctx.unit;
+		int64_t res; fscanf(unit->fd,"%ld",&res);
+		return res;
+	}
+	double    val_get_flt (CtxStream& ctx){
+		FsItem* unit = (FsItem*) ctx.unit;
+		double res; fscanf(unit->fd,"%lf",&res);
+		return res;
+	}
+	String    val_get_str (CtxStream& ctx){
+		FsItem* unit = (FsItem*) ctx.unit;
+		char buffer[4096];
+		fscanf(unit->fd,"%4096s",buffer);
+		return buffer;
+	}
 	CtxRandom val_get_vet (CtxStream& ctx){}
 };
 
@@ -196,6 +213,34 @@ void FsItem::root_open_stream (CtxStream& dst, char mode){
 }
 
 
+/*struct StreamDataText : StreamData {
+	StreamData* raw;
+
+	size_t raw_get (CtxStream& ctx, char* dst, size_t size){
+		return this->raw->raw_get(*this,dst,size);
+	}
+
+	size_t raw_put (CtxStream& ctx, char* dst, size_t size){
+		return this->raw->raw_get(*this,dst,size);
+	}
+
+	uint64_t  val_get_nat (CtxStream& ctx){
+		char c = this->getc();
+	}
+
+	int64_t   val_get_int (CtxStream& ctx){}
+	double    val_get_flt (CtxStream& ctx){}
+	String    val_get_str (CtxStream& ctx){}
+	CtxRandom val_get_vet (CtxStream& ctx){}
+
+	char getc(){
+		char c; this->raw->raw_get(*this,&c,1);
+		return c;
+	}
+};*/
+
+
+/*----------------------------------------------------------------------------*/
 
 
 
@@ -203,7 +248,7 @@ void FsItem::root_open_stream (CtxStream& dst, char mode){
 
 
 
-
+/*============================================================================*/
 
 struct FsDirStreamData : StreamData {
 	DIR*   dir;
@@ -245,8 +290,10 @@ struct FsDirStreamData : StreamData {
 	}
 };
 
+/*----------------------------------------------------------------------------*/
 
 
+/*============================================================================*/
 
 struct FsSystem : UnitTree {
 	String root;
@@ -422,3 +469,5 @@ protected:
 	return fs.random_stat( (CtxRandom*)ctx );
 	return Stat(0);
 }*/
+
+/*----------------------------------------------------------------------------*/

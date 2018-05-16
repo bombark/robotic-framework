@@ -43,22 +43,135 @@ void lista(MapPtr node, int level=0){
 
 
 
+/*struct FsItemStream : StreamData {
+	size_t raw_get (CtxStream& ctx, char* dst, size_t size){
+	}
+	size_t raw_put (CtxStream& ctx, char* dst, size_t size){
+	}
+	void  base_update(CtxStream& ctx){
+	}
+	uint64_t  val_get_nat (CtxStream& ctx){
+	}
+	int64_t   val_get_int (CtxStream& ctx){
+	}
+	double    val_get_flt (CtxStream& ctx){
+	}
+	String    val_get_str (CtxStream& ctx){
+	}
+	CtxRandom val_get_vet (CtxStream& ctx){}
+};*/
+
+
+
+std::vector<string> explode(String text, char div){
+	String buf;
+	std::vector<string> res;
+	size_t size=text.size();
+	for ( size_t i=0; i<size; i++){
+		char c = text[i];
+		if ( c == div ){
+			if ( buf.size() > 0 ){
+				res.push_back(buf);
+				buf.clear();
+			}
+		} else {
+			if ( buf.size() == 0 && c == ' ' ) continue;
+			buf += c;
+		}
+	}
+	if ( buf.size() > 0 ){
+		res.push_back(buf);
+	}
+	return res;
+}
+
+
+
+struct MapLine2Stream : UnitVector {
+	VetPtr data;
+	CtxRandom row;
+	std::vector<string> header;
+	size_t row_id;
+
+	MapLine2Stream(VetPtr& vet, String format){
+		this->data = vet;
+		header = explode(format,',');
+		row_id = 0;
+		row = this->data[0].openAsMap();
+	}
+
+	uint64_t size(){return header.size();}
+	uint64_t toNat(){}
+	int64_t  toInt(){}
+	double   toFlt(){}
+	String   toStr(){}
+	void     setNat(uint64_t val){}
+	void     setInt(int64_t  val){}
+	void     setFlt(double   val){}
+	void     setStr(String   val){}
+	void     random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode){}
+	void     root_open_stream (CtxStream& dst, char mode){}
+	void     node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){}
+
+	Stat     random_stat   (CtxRandom* ctx){
+		size_t idx = ctx->idx.getNat(0);
+		return row[ header[idx] ].stat();
+	}
+
+	void     random_erase  (CtxRandom* ctx, bool   index){}
+
+	void     random_resize (CtxRandom* ctx, size_t size){}
+
+	uint64_t random_size   (CtxRandom* ctx){
+		//size_t idx = ctx->idx.getNat(0);
+		//return vet[ header[idx] ].size();
+	}
+
+	uint64_t random_get_raw (CtxRandom* ctx, void* dst, size_t size){}
+	uint64_t random_put_raw (CtxRandom* ctx, const void* src, size_t size){}
+	uint64_t random_get_nat (CtxRandom* ctx){
+		size_t idx = ctx->idx.getNat(0);
+		return row[ header[idx] ].toNat();
+	}
+	int64_t  random_get_int (CtxRandom* ctx){
+		size_t idx = ctx->idx.getNat(0);
+		return row[ header[idx] ].toInt();
+	}
+	double   random_get_flt (CtxRandom* ctx){
+		size_t idx = ctx->idx.getNat(0);
+		return row[ header[idx] ].toFlt();
+	}
+	void     random_get_str (CtxRandom* ctx, String& dst){
+		size_t idx = ctx->idx.getNat(0);
+		dst += row[ header[idx] ].toStr();
+	}
+	void     random_put_nat  (CtxRandom* ctx, uint64_t val){}
+	void     random_put_int  (CtxRandom* ctx, int64_t  val){}
+	void     random_put_flt  (CtxRandom* ctx, double   val){}
+	void     random_put_str  (CtxRandom* ctx, String   val){}
+	void     random_make      (CtxRandom* ctx, Stat   type){}
+	void     random_make_item (CtxRandom* ctx, size_t size){}
+};
+
 
 int main(int argc, char** argv){
 	FsItem file("data.txt","r");
+	YamlNode data( file.toStr() );
+	VetPtr base = data["data"].openAsVet();
 
-	cout << file.toStr() << endl;
+	MapLine2Stream a(base,"z,y,x");
 
-	ReaderRaw stream = file.toStream();
-	cout << stream.getc() << endl;
-	cout << stream.getc() << endl;
-	cout << stream.getc() << endl;
+	cout << a[1].toStr() << endl;
 
-	stream.log();
-
+	/*ReaderVet vet2(base);
+	while ( vet.read() ){
+	}*/
 
 
-	/*YamlNode data( file );
+
+	//cout << data["data"][1].toStr() << endl;
+
+	/*
 
 	data.log();
 	CtxRandom ctx = data;

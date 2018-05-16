@@ -346,6 +346,21 @@ struct StreamData {
 	}
 };
 
+struct CtxUnit : Ctx {
+	CtxUnit() : Ctx(){}
+	CtxUnit(Unit* unit) : Ctx(unit){}
+	CtxUnit(Unit& unit) : Ctx(unit){}
+
+	void log(){
+		printf("CtxUnit{unit: %p",this->unit);
+		if ( this->unit ){
+			Stat stat = this->unit->stat();
+			printf(", type: %s", stat.type);
+		}
+		printf("}\n");
+	}
+};
+
 
 struct CtxStream : Ctx {
 	StreamData* stream_data;
@@ -386,8 +401,10 @@ struct CtxRandom : Ctx {
 	CtxRandom(Unit& unit) : Ctx(unit){}
 	CtxRandom(Unit& unit, size_t idx) : Ctx(unit){this->idx = idx;}
 	CtxRandom(Unit& unit, String idx) : Ctx(unit){this->idx = idx;}
+	CtxRandom(const CtxUnit& unit) : Ctx(unit){}
 
 	CtxRandom(const CtxRandom& ctx) : Ctx(ctx){}
+
 
 	Stat stat(){
 		return this->unit->random_stat(this);
@@ -406,6 +423,17 @@ struct CtxRandom : Ctx {
 	void putFlt(double   val){this->unit->random_put_flt(this,val);}
 	void putStr(String   val){this->unit->random_put_str(this,val);}
 
+	CtxUnit openAsVet(){
+		CtxRandom res; this->unit->random_open_random(this,res,0);
+		return res.asCtxUnit();
+	}
+
+	CtxUnit openAsMap(){
+		CtxRandom res; this->unit->random_open_random(this,res,0);
+		return res.asCtxUnit();
+	}
+
+
 	void operator=(uint8_t  val){this->putNat(val);}
 	void operator=(uint16_t val){this->putNat(val);}
 	void operator=(uint32_t val){this->putNat(val);}
@@ -420,6 +448,8 @@ struct CtxRandom : Ctx {
 
 	CtxRandom& operator[](size_t idx){this->idx.putNat(idx); return *this;}
 	CtxRandom& operator[](String idx){this->idx.putStr(idx); return *this;}
+
+	CtxUnit&   asCtxUnit(){return *((CtxUnit*)this);}
 
 
 	void log(){
@@ -473,10 +503,12 @@ struct RandomUnit : CtxRandom {
 		this->type=2;
 		this->unit->root_open_random(*this, 2);
 	}
+	RandomUnit(const CtxUnit& unit) : CtxRandom(unit){}
 	RandomUnit(const CtxRandom& node) : CtxRandom(node){
-		this->type=2;
-		this->unit->random_open_random(&node,*this, 2);
+		//this->type=2;
+		//this->unit->random_open_random(&node,*this, 2);
 	}
+
 
 	Stat stat(){return this->unit->stat();}
 
@@ -783,6 +815,7 @@ struct WriterVal : CtxStream {
 struct VetPtr : RandomUnit {
 	VetPtr() : RandomUnit(){}
 	VetPtr(Unit& unit) : RandomUnit(unit){}
+	VetPtr(const CtxUnit&   unit) : RandomUnit(unit){}
 	VetPtr(const CtxRandom& node) : RandomUnit(node){}
 
 	inline Stat   stat(){return this->unit->stat();}
@@ -797,11 +830,12 @@ struct VetPtr : RandomUnit {
 
 struct ReaderVet : Reader {
 	ReaderVet() : Reader(){}
-	ReaderVet(Unit& unit) : Reader(unit){}
+	ReaderVet(Unit&   unit) : Reader(unit){}
+	ReaderVet(VetPtr& unit) : Reader(unit){}
 
-	inline VetPtr  row(){}
+	/*inline VetPtr  row(){}
 	inline CtxRandom operator[](size_t idx){}
-	inline CtxRandom operator[](String idx){}
+	inline CtxRandom operator[](String idx){}*/
 };
 
 struct WriterVet : CtxStream {
@@ -959,6 +993,9 @@ struct UnitCollection : Unit {
 	void setInt(int64_t  val){}
 	void setFlt(double   val){}
 	void setStr(String   val){}
+
+	CtxRandom operator[](size_t idx){return CtxRandom(*this,idx);}
+	CtxRandom operator[](String idx){return CtxRandom(*this,idx);}
 };
 
 
