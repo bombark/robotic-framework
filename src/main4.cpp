@@ -156,12 +156,19 @@ struct MapLine2Stream : UnitVector {
 
 int main(int argc, char** argv){
 	FsItem file("data.txt","r");
-	YamlNode data( file.toStr() );
+
+	ReaderRaw raw = file.toStream();
+	while ( raw.isOk() )
+		cout << raw.getc();
+	cout << endl;
+
+	/*cout << raw.getc() << endl;
+	cout << raw.getc() << endl;*/
+
+	/*YamlNode data( file.toStr() );
 	VetPtr base = data["data"].openAsVet();
-
 	MapLine2Stream a(base,"z,y,x");
-
-	cout << a[1].toStr() << endl;
+	cout << a[1].toStr() << endl;*/
 
 	/*ReaderVet vet2(base);
 	while ( vet.read() ){

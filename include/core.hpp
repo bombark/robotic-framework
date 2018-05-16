@@ -304,6 +304,19 @@ struct Ctx {
 
 /*============================================================================*/
 
+struct StreamRawApi {
+	void (*read )(CtxStream* ctx, char* dst, size_t size);
+	void (*write)(CtxStream* ctx, const char* src, size_t size);
+	bool (*is_ok)(CtxStream* ctx);
+};
+
+struct StreamValApi {
+	void (*get_nat)(CtxStream* ctx);
+	void (*get_str)(CtxStream* ctx);
+	void (*put_nat)(CtxStream* ctx);
+	void (*put_str)(CtxStream* ctx);
+};
+
 
 struct StreamData {
 	size_t  ctx_count;
@@ -364,6 +377,8 @@ struct CtxUnit : Ctx {
 
 struct CtxStream : Ctx {
 	StreamData* stream_data;
+	StreamRawApi raw;
+	StreamValApi val;
 
 	CtxStream() : Ctx(){
 		stream_data = NULL;
@@ -376,9 +391,8 @@ struct CtxStream : Ctx {
 	}
 	CtxStream(const CtxStream& stream){
 		this->unit = stream.unit->usesUnit();
-		if ( stream.stream_data ){
-			this->stream_data = stream.stream_data->uses();
-		}
+		this->raw = stream.raw;
+		this->val = stream.val;
 	}
 
 	void openStreamData(){this->unit->root_open_stream(*this,0);}
@@ -673,32 +687,36 @@ struct ReaderRaw : CtxStream {
 	ReaderRaw() : CtxStream(){}
 	ReaderRaw(Unit& unit) : CtxStream(unit){}
 	ReaderRaw(const CtxStream& ctx) : CtxStream(ctx){}
-
 	char getc(){
-		char c; this->stream_data->raw_get(*this,&c,1);
+		char c; this->raw.read(this,&c,1);
 		return c;
 	}
+	bool isOk(){return this->raw.is_ok(this);}
 };
 
 
 struct WriterRaw : CtxStream {
 	WriterRaw() : CtxStream(){}
 	WriterRaw(Unit& unit) : CtxStream(unit){}
+	WriterRaw(const CtxStream& ctx) : CtxStream(ctx){}
 
 	WriterRaw& put(char     val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(uint8_t  val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(uint16_t val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(uint32_t val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(uint64_t val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(int8_t  val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(int16_t val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(int32_t val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(int64_t val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(float   val){this->write(&val,sizeof(val));return *this;}
-	WriterRaw& put(double  val){this->write(&val,sizeof(val));return *this;}
+	WriterRaw& put(uint8_t  val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(uint16_t val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(uint32_t val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(uint64_t val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(int8_t  val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(int16_t val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(int32_t val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(int64_t val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(float   val){this->write((char*)&val,sizeof(val));return *this;}
+	WriterRaw& put(double  val){this->write((char*)&val,sizeof(val));return *this;}
 	WriterRaw& put(String val){this->write(val.c_str(), val.size());return *this;}
 
-	size_t write(const void* val, size_t size){}
+	size_t write(const char* src, size_t size){
+		this->raw.write(this,src,size);
+	}
+	bool isOk(){return this->raw.is_ok(this);}
 };
 
 

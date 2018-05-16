@@ -87,7 +87,12 @@ struct FsItem : UnitItem {
 
 
 
-	void root_open_stream (CtxStream& dst, char mode);
+	void root_open_stream (CtxStream& dst, char mode){
+		dst.base = 0;
+		dst.raw.read = stx_raw_read;
+		dst.raw.write = stx_raw_write;
+		dst.raw.is_ok = stx_raw_is_ok;
+	}
 
 	void root_open_random (CtxRandom& dst, char mode){}
 
@@ -164,6 +169,21 @@ struct FsItem : UnitItem {
 		}
 		return res;
 	}
+
+	static void stx_raw_read(CtxStream* ctx, char* dst, size_t size){
+		FsItem* self = (FsItem*) ctx->unit;
+		fread( dst, 1, size, self->fd );
+	}
+
+	static void stx_raw_write(CtxStream* ctx, const char* src, size_t size){
+		FsItem* self = (FsItem*) ctx->unit;
+		fwrite( src, 1, size, self->fd );
+	}
+
+	static bool stx_raw_is_ok(CtxStream* ctx){
+		FsItem* self = (FsItem*) ctx->unit;
+		return !feof(self->fd);
+	}
 };
 
 
@@ -206,11 +226,6 @@ struct FsItemStream : StreamData {
 };
 
 
-
-void FsItem::root_open_stream (CtxStream& dst, char mode){
-	dst.stream_data = new FsItemStream();
-	dst.base = 0;
-}
 
 
 /*struct StreamDataText : StreamData {
