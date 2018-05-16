@@ -8,7 +8,7 @@
 
 /*============================================================================*/
 
-struct YamlIterator : StreamData {
+/*struct Iterator {
 	YAML::const_iterator it;
 	YAML::const_iterator end;
 
@@ -51,7 +51,7 @@ struct YamlIterator : StreamData {
 	bool itr_is_ok(CtxStream& ctx){
 		return this->it != this->end;
 	}
-};
+};*/
 
 /*----------------------------------------------------------------------------*/
 
@@ -109,19 +109,6 @@ struct YamlNode : UnitTree {
 	uint64_t random_size   (CtxRandom* ctx){
 		String field = ctx->idx.getStr(0);
 		return this->node[field].size();
-	}
-
-	void root_open_stream (CtxStream& dst, char mode){
-		dst.stream_data = new YamlIterator(this->node);
-	}
-
-	void node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
-		if ( ctx->idx.size == 0 ){
-			dst.stream_data = new YamlIterator(this->node);
-		} else {
-			String field = ctx->idx.getStr(0);
-			dst.stream_data = new YamlIterator(this->node[field]);
-		}
 	}
 
 	void root_open_random(CtxRandom& dst, char mode){
@@ -196,6 +183,39 @@ struct YamlNode : UnitTree {
 	}
 
 
+	struct Iterator : StreamValApi {
+		YAML::const_iterator ite;
+		YAML::const_iterator end;
+
+		Iterator(YAML::Node node){
+			this->ite = node.begin();
+			this->end = node.end();
+		}
+
+		CtxRandom read(CtxStream& ctx){
+			CtxRandom res;
+			if ( ite != end ){
+				res.unit = ctx.unit;
+				res.base = ite->first.as<String>();
+			}
+			return res;
+		}
+	};
+
+	void root_open_stream (CtxStream& dst, char mode){
+		dst.val = new Iterator(this->node);
+	}
+
+	void node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){
+		if ( ctx->idx.size == 0 ){
+			//dst.val.data = new
+		} else {
+			String field = ctx->idx.getStr(0);
+			//dst.stream_data = new YamlIterator(this->node[field]);
+		}
+	}
+
+
 protected:
 	Stat findNode( const CtxRandom& ctx, YAML::Node& out, String& out_field){
 		return this->findNodeRec(ctx,this->node,0,out,out_field);
@@ -251,11 +271,5 @@ protected:
 	}
 };
 
-
-CtxRandom YamlIterator::val_get_vet (CtxStream& ctx){
-	CtxRandom res = new YamlNode(this->it->second);
-	res.log();
-	return res;
-}
 
 /*----------------------------------------------------------------------------*/

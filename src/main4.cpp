@@ -157,10 +157,26 @@ struct MapLine2Stream : UnitVector {
 int main(int argc, char** argv){
 	FsItem file("data.txt","r");
 
-	ReaderRaw raw = file.toStream();
-	while ( raw.isOk() )
-		cout << raw.getc();
-	cout << endl;
+	YamlNode data("{name: felipe, score: 10}");
+
+	Iterator  it = data.begin();
+	CtxRandom row = it.read();
+
+	Stat stat = row.stat();
+	cout << row.base.getStr(0) << endl;
+	if ( stat.isItem() ){
+		cout << "item\n";
+	} else {
+		cout << "coll\n";
+	}
+
+	/*FsNode name("pessoa/name");
+	name.mkitem();
+	name.resize(200);
+	Reader raw = name.toReader();*/
+
+
+
 
 	/*cout << raw.getc() << endl;
 	cout << raw.getc() << endl;*/

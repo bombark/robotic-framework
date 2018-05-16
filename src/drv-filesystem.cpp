@@ -333,9 +333,7 @@ struct FsSystem : UnitTree {
 //LOG(url.c_str());
 		Stat node_stat = this->getStat(url);
 		if ( node_stat.isColl() ){
-			dst.stream_data = new FsDirStreamData(url);
 		} else {
-			dst.stream_data = NULL;
 		}
 	}
 

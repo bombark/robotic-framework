@@ -90,6 +90,45 @@ struct Error {
 
 /*============================================================================*/
 
+/*struct Value {
+	char type;
+	union {
+		uint64_t nat64;
+		int64_t  int64;
+		double   flt64;
+	};
+	String str;
+
+	Value(){this->clear();}
+
+	void clear(){type=0;nat64=0;}
+
+	void set(uint64_t val){this->nat64=val;type=0;}
+	void set(int64_t  val){this->nat64=val;type=1;}
+	void set(double   val){this->nat64=val;type=2;}
+	void set(String   val){this->str=val;type=3;}
+
+	uint64_t& atNat(){return this->nat64;}
+	int64_t&  atInt(){return this->int64;}
+	double&   atFlt(){return this->flt64;}
+
+	uint64_t toNat(){
+		if ( this->isNum() )
+			return this->nat64;
+		if ( this->isFlt() )
+			return flt64;
+		if ( this->isStr() )
+			return atoi(this->str.c_str());
+	}
+
+	bool isNum(){return this->type<=1;}
+	bool isNat(){return this->type=0;}
+	bool isInt(){return this->type=1;}
+	bool isFlt(){return this->type=2;}
+	bool isStr(){return this->type=3;}
+};*/
+
+
 struct Args {
 	short size;
 	char  format[4];
@@ -311,10 +350,7 @@ struct StreamRawApi {
 };
 
 struct StreamValApi {
-	void (*get_nat)(CtxStream* ctx);
-	void (*get_str)(CtxStream* ctx);
-	void (*put_nat)(CtxStream* ctx);
-	void (*put_str)(CtxStream* ctx);
+	virtual CtxRandom read(CtxStream& ctx)=0;
 };
 
 
@@ -376,36 +412,21 @@ struct CtxUnit : Ctx {
 
 
 struct CtxStream : Ctx {
-	StreamData* stream_data;
-	StreamRawApi raw;
-	StreamValApi val;
+	StreamRawApi  raw;
+	StreamValApi* val;
 
-	CtxStream() : Ctx(){
-		stream_data = NULL;
-	}
-	CtxStream(Unit* unit) : Ctx(unit){
-		stream_data = NULL;
-	}
-	CtxStream(Unit& unit) : Ctx(unit){
-		stream_data = NULL;
-	}
+	CtxStream() : Ctx(){}
+	CtxStream(Unit* unit) : Ctx(unit){}
+	CtxStream(Unit& unit) : Ctx(unit){}
 	CtxStream(const CtxStream& stream){
 		this->unit = stream.unit->usesUnit();
 		this->raw = stream.raw;
 		this->val = stream.val;
 	}
 
-	void openStreamData(){this->unit->root_open_stream(*this,0);}
-
 	void log(){
 		String res;
-		if ( !this->stream_data )
-			printf("Ctx{unit: %p, stream: nil}\n",this->unit);
-		else {
-			this->stream_data->base_update(*this);
-			const char* _idx = this->base.getStr(0).c_str();
-			printf("Ctx{unit: %p, stream: {key:%s} }\n",this->unit,_idx);
-		}
+		printf("Ctx{unit: %p, stream: nil}\n",this->unit);
 	}
 };
 
@@ -538,81 +559,63 @@ struct RandomUnit : CtxRandom {
 
 struct Reader : CtxStream {
 	Reader() : CtxStream(){}
-	Reader(Unit& unit) : CtxStream(unit){ this->openStreamData(); }
-	Reader(Unit* unit) : CtxStream(unit){ this->openStreamData(); }
+	Reader(Unit& unit) : CtxStream(unit){}
+	Reader(Unit* unit) : CtxStream(unit){}
 	Reader(const CtxRandom& ctx){
 		this->unit = ctx.unit;
 		ctx.unit->node_open_stream(&ctx,*this,0);
 	}
 
-	/*Stat       statRow(){
-		return this->stream_data->stat();
-	}
-	size_t     sizeRow(){return 1;}*/
-
-	Reader& getNat(uint64_t& val){val = this->stream_data->val_get_nat(*this);return *this;}
-	Reader& getInt(int64_t&  val){val = this->stream_data->val_get_int(*this);return *this;}
-	Reader& getFlt(double&   val){val = this->stream_data->val_get_flt(*this);return *this;}
-	Reader& getStr(String&   val){val = this->stream_data->val_get_str(*this);return *this;}
-
-	/*bool read(){
-		this->next();
-		return this->statRow().isPresent();
-	}
-
-	void prev(){this->stream_data->prev(*this);}
-	void next(){this->stream_data->next(*this);}
-	bool isOk(){return this->stream_data->isOk();}
-
-	void operator++(){this->next();}
-	void operator--(){this->prev();}*/
+	Reader& getNat(uint64_t& val){return *this;}
+	Reader& getInt(int64_t&  val){return *this;}
+	Reader& getFlt(double&   val){return *this;}
+	Reader& getStr(String&   val){return *this;}
 };
 
 
 struct Iterator : CtxStream {
 	Iterator() : CtxStream(){}
 	Iterator(Unit& unit) : CtxStream(unit){
-		this->openStreamData();
-		this->stream_data->itr_begin(*this);
+		this->unit->root_open_stream(*this,0);
 	}
 	Iterator(Unit* unit) : CtxStream(unit){
-		this->openStreamData();
-		this->stream_data->itr_begin(*this);
+		this->unit->root_open_stream(*this,0);
 	}
 	Iterator(const CtxRandom& ctx){
 		this->unit = ctx.unit;
 		ctx.unit->node_open_stream(&ctx,*this,0);
-		this->stream_data->itr_begin(*this);
 	}
 
-	Stat      stat(){return this->stream_data->itr_stat(*this);}
+	Stat      stat(){}
 
-	uint64_t  toNat(){return this->stream_data->val_get_nat(*this);}
-	int64_t   toInt(){return this->stream_data->val_get_int(*this);}
-	double    toFlt(){return this->stream_data->val_get_flt(*this);}
-	String    toStr(){return this->stream_data->val_get_str(*this);}
+	CtxRandom read(){return this->val->read(*this);}
+
+	/*uint64_t  toNat(){this->val->}
+	int64_t   toInt(){}
+	double    toFlt(){}
+	String    toStr(){}
 	CtxRandom toRaw(){}
-	CtxRandom toVet(){return this->stream_data->val_get_vet(*this);}
-	CtxRandom toMap(){}
+	CtxRandom toVet(){}
+	CtxRandom toMap(){}*/
 
-	Iterator& getNat(uint64_t& val){val =this->toNat();return *this;}
+	/*Iterator& getNat(uint64_t& val){val =this->toNat();return *this;}
 	Iterator& getInt(int64_t&  val){val =this->toInt();return *this;}
 	Iterator& getFlt(double&   val){val =this->toFlt();return *this;}
 	Iterator& getStr(String&   val){val+=this->toStr();return *this;}
 
-	Iterator& putNat(uint64_t val){this->stream_data->val_put_nat(*this,val);return *this;}
-	Iterator& putInt(int64_t  val){this->stream_data->val_put_int(*this,val);return *this;}
-	Iterator& putFlt(double   val){this->stream_data->val_put_flt(*this,val);return *this;}
-	Iterator& putStr(String   val){this->stream_data->val_put_str(*this,val);return *this;}
+	Iterator& putNat(uint64_t val){}
+	Iterator& putInt(int64_t  val){}
+	Iterator& putFlt(double   val){}
+	Iterator& putStr(String   val){return *this;}
 
-	void prev(){this->stream_data->itr_prev(*this);}
-	void next(){this->stream_data->itr_next(*this);}
-	bool isOk(){return this->stream_data->itr_is_ok(*this);}
+	void prev(){}
+	void next(){}
+	bool isOk(){}
 
 	void operator++(){this->next();}
-	void operator--(){this->prev();}
+	void operator--(){this->prev();}*/
 
-	String key(){return this->idx.getStr(0);}
+	//String key(){return this->base.getStr(0);}
 };
 
 
@@ -902,7 +905,6 @@ struct MapPtr : RandomUnit {
 	MapPtr() : RandomUnit(){}
 	MapPtr(Unit& unit) : RandomUnit(unit){}
 	MapPtr(Unit* unit) : RandomUnit(unit){}
-
 	MapPtr(const MapNode& node) : RandomUnit(node.unit){
 		node.unit->random_open_random( (CtxRandom*)&node,*this,0 );
 	}
@@ -1105,3 +1107,94 @@ struct UnitTree : UnitCollection {
 };
 
 /*----------------------------------------------------------------------------*/
+
+
+
+
+
+
+
+
+
+struct Value : UnitItem {
+	char type;
+	union {
+		uint64_t nat64;
+		int64_t  int64;
+		double   flt64;
+	};
+	String str;
+
+	Value(){this->clear();}
+
+	void     clear(){type=0;nat64=0;}
+	uint64_t size(){return 1;}
+
+	uint64_t& atNat(){return this->nat64;}
+	int64_t&  atInt(){return this->int64;}
+	double&   atFlt(){return this->flt64;}
+
+	bool isNum(){return this->type<=1;}
+	bool isNat(){return this->type=0;}
+	bool isInt(){return this->type=1;}
+	bool isFlt(){return this->type=2;}
+	bool isStr(){return this->type=3;}
+
+	uint64_t toNat(){
+		if ( this->isNum() )
+			return this->nat64;
+		if ( this->isFlt() )
+			return flt64;
+		if ( this->isStr() )
+			return atoi(this->str.c_str());
+	}
+	int64_t  toInt(){
+		if ( this->isNum() )
+			return this->nat64;
+		if ( this->isFlt() )
+			return flt64;
+		if ( this->isStr() )
+			return atoi(this->str.c_str());
+	}
+	double   toFlt(){
+		if ( this->isNum() )
+			return this->nat64;
+		if ( this->isFlt() )
+			return flt64;
+		if ( this->isStr() )
+			return atoi(this->str.c_str());
+	}
+	virtual String   toStr(){
+		if ( this->isStr() )
+			return this->str;
+		if ( this->isNum() )
+			return "";
+		if ( this->isFlt() )
+			return "";
+	}
+
+	void     setNat(uint64_t val){this->nat64=val;type=0;}
+	void     setInt(int64_t  val){this->nat64=val;type=1;}
+	void     setFlt(double   val){this->nat64=val;type=2;}
+	void     setStr(String   val){this->str=val;type=3;}
+
+	void     random_open_random (const CtxRandom* ctx, CtxRandom& dst, char mode){}
+	void     root_open_stream (CtxStream& dst, char mode){}
+	void     node_open_stream (const CtxRandom* ctx, CtxStream& dst, char mode){}
+	Stat     random_stat   (CtxRandom* ctx){}
+	void     random_erase  (CtxRandom* ctx, bool   index){}
+	void     random_resize (CtxRandom* ctx, size_t size){}
+	uint64_t random_size   (CtxRandom* ctx){}
+	uint64_t random_get_raw (CtxRandom* ctx, void* dst, size_t size){}
+	uint64_t random_put_raw (CtxRandom* ctx, const void* src, size_t size){}
+	uint64_t random_get_nat (CtxRandom* ctx){}
+	int64_t  random_get_int (CtxRandom* ctx){}
+	double   random_get_flt (CtxRandom* ctx){}
+	void     random_get_str (CtxRandom* ctx, String& dst){}
+	void     random_put_nat  (CtxRandom* ctx, uint64_t val){}
+	void     random_put_int  (CtxRandom* ctx, int64_t  val){}
+	void     random_put_flt  (CtxRandom* ctx, double   val){}
+	void     random_put_str  (CtxRandom* ctx, String   val){}
+	void     random_make      (CtxRandom* ctx, Stat   type){}
+	void     random_make_item (CtxRandom* ctx, size_t size){}
+};
