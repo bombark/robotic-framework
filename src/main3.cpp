@@ -1,174 +1,124 @@
 /*============================================================================*/
 
-#include "core.hpp"
-#include "drv-basic.hpp"
-//#include "drv-filesystem.hpp"
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <vector>
-#include <map>
-
-#include <dirent.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-
+#include "core2.hpp"
 #include <iostream>
-
+#include <stdarg.h>
+#include <string.h>
 
 using namespace std;
 
 /*----------------------------------------------------------------------------*/
 
 
+void c2e_put(Ctx* ctx, char type, ...){
+	/*va_list args;
+	va_start(args, type);
+	if ( type == 0 ){
+		ctx->c2e.put( va_arg(args, int) );
+	} else if ( type == 1 ){
+		ctx->c2e.put( va_arg(args, char*) );
+	}*/
+}
 
-struct FsFile : Unit {
+
+struct FsStream : UnitStream {
 	FILE* fd;
-	string buf;
-	struct stat buf_stat;
-
-	FsFile(){
+	FsStream(){
+		this->fd = stdout;
 	}
 
-	Stat     stat(){return Stat().setItem();}
-	uint64_t size(){return 0;}
-	void     clear(){}
-	uint64_t toNat  (){}
-	int64_t  toInt  (){}
-	double   toFlt  (){}
-	String   toStr  (){}
-	void     putNat (uint64_t val){}
-	void     putInt (uint64_t val){}
-	void     putFlt (double   val){}
-	void     putStr (String   val){}
+	Stat    root_stat(){return Stat(0);}
+	size_t  root_size(){return 0;}
+	void    root_clear(){}
 
-	void     read_bytes (void* dst, size_t ini, size_t size){
-		fseek(fd,ini,SEEK_SET);
-		fread(dst,size,1,fd);
+	size_t  root_get_raw(char* dst, size_t size){return fread(dst,1,size,fd);}
+
+	Num     root_get_num(char type){
+		Num res; fread(&res.nat64,1,sizeof(res),fd);
+		return res;
 	}
 
-	void     write_bytes(void* src, size_t ini, size_t size){
-		fseek(fd,ini,SEEK_SET);
-		fwrite(src,size,1,fd);
-	}
+	void    root_get_str(String& out){}
+	UnitRef root_get_col(){}
+	size_t  root_put_raw(const char* dst, size_t size){fwrite(dst,1,size,fd);}
+	void    root_put_num(char type, Num val){fwrite(&val.nat64,1,sizeof(val),fd);}
+	void    root_put_str(String val){fwrite(val.c_str(),1,val.size(),fd);}
+	void    root_put_col(Ctx& src){}
 
+	UnitRef   root_mkitm(size_t size){}
+	UnitStack root_mkvet_ini(){}
+	UnitStack root_mkmap_ini(){}
+	void      root_mkcol_end(Ctx& src){}
 
-	size_t   row_get_id(){}
-	void     row_next(){}
-	void     row_prev(){}
-
-
-	virtual Stat     node_stat (Node& node)=0;
-	virtual uint64_t node_size (Node& node)=0;
-	virtual void     node_make (Node& node, Stat type)=0;
-	virtual uint64_t node_to_nat (Node& node, uint64_t notdef)=0;
-	virtual int64_t  node_to_int (Node& node, int64_t  notdef)=0;
-	virtual double   node_to_flt (Node& node, double   notdef)=0;
-	virtual String   node_to_str (Node& node, const char* notdef)=0;
-	virtual void     node_put_nat (Node& node, uint64_t val)=0;
-	virtual void     node_put_int (Node& node, uint64_t val)=0;
-	virtual void     node_put_flt (Node& node, double   val)=0;
-	virtual void     node_put_str (Node& node, String   val)=0;
-	virtual void     node_join_nat(Node& out, uint64_t idx, Node* base)=0;
-	virtual void     node_join_str(Node& out, String   idx, Node* base)=0;
+	void    root_end_line(){}
 };
 
 
 
+struct TextStream : UnitStream {
+	Unit* base;
+	char div_v;
+	char div_l;
 
-
-
-
-
-
-/*============================================================================*/
-
-
-struct UnitNode : Unit {
-	Node base;
-
-	UnitNode(){}
-
-	UnitNode(const Node& base){
-		this->base = base;
+	TextStream(Unit& unit, char div_v=' ', char div_l='\n'){
+		this->base = &unit;
+		this->div_v = div_v;
+		this->div_l = div_l;
 	}
 
-	Stat     stat(){return base.stat();}
+	Stat    root_stat(){return Stat(0);}
+	size_t  root_size(){return 0;}
+	void    root_clear(){}
 
-	uint64_t size(){return base.size();}
-
-	void     putStr(String val){base.set(val);}
-
-	Stat     node_stat  (Node& node){
-		Node res;
-		//base.unit->node_join(res,node,base);
-		return res.stat();
+	size_t  root_get_raw(char* dst, size_t size){
+		return this->base->root_get_raw(dst,size);
 	}
 
-	uint64_t node_size  (Node& node){
-		Node res;
-		//base.unit->node_join(res,node,base);
-		return res.size();
+	Num     root_get_num(char type){
+
 	}
 
-	String   node_to_str(Node& node){
-		Node res;
-		//base.unit->node_join(res,node,base);
-		return res.toStr();
+	void    root_get_str(String& out){
+
 	}
 
-	void node_join_nat(Node& out, uint64_t idx, Node* base){
-		out.idx_i = 0;
+	UnitRef root_get_col(){}
+	size_t  root_put_raw(const char* dst, size_t size){
+		return this->base->root_put_raw(dst,size);
 	}
 
-	void node_join_str(Node& out, String idx, Node* base){
-		out.idx_s = base->idx_s + "/" + idx;
+	void    root_put_num(char type, Num val){
+		char buf[64]; sprintf(buf, "%ld", val.int64);
+		this->base->root_put_raw(buf,strlen(buf));
 	}
 
-	void     node_put_str(Node& node, String val){
-		Node res;
-		res.unit = base.unit;
-		base.unit->node_join_str(res,node.idx_s,&base);
-		res.set(val);
+	void    root_put_str(String val){
+		this->base->root_put_raw(val.c_str(),val.size());
+		this->base->root_put_raw(&div_v,1);
 	}
 
-	void     node_make(Node& node, Stat type){
-		Node res;
-		//base.unit->node_join(res,node,base);
-		//res.make();
+	void    root_put_col(Ctx& src){}
+
+	UnitRef root_mkitm(size_t size){}
+	UnitRef root_mkvet_ini(){}
+	UnitRef root_mkmap_ini(){}
+	void    root_mkcol_end(Ctx& src){}
+
+	void    root_end_line(){
+		this->base->root_put_raw(&div_l,1);
 	}
 };
-
-
-
-/*----------------------------------------------------------------------------*/
-
-
-
 
 
 
 int main(){
-	FsFile file;
+	FsStream fs;
+	TextStream text(fs,'|');
+	//YamlStream text(fs,"x,y,z,w");
+
+	text.put("aaa").put("ffff").put("eeee").put(20).endl();
+	text.put("aaa").put("ffff").put("eeee").put(20).endl();
+	text.put("aaa").put("ffff").put("eeee").put(20).endl();
 
 
-	/*VetUnit vet;
-	vet.putStr("opa1");
-	vet.putStr("opa2");
-	vet.putStr("opa3");
-	cout << vet << endl;
-
-
-	MapUnit p1;
-	p1["name"].set("joao");
-
-
-
-
-	for (MapIt it=p1.begin(); it.isOk(); it.next() ){
-		cout << it[0].toStr() << ": " << it[1].toStr() << endl;
-	}*/
-
-
-	return 0;
 }

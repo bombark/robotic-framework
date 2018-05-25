@@ -2,80 +2,37 @@
 
 import ctypes
 
-class Stat:
-	def __init__(self):
-		self.type = 0
-
-	def isNull(self): return self.type == 0x0000;
-	def isItem(self): return (self.type&0x0010) == 0x0010;
-	def isColl(self): return (self.type&0x0020) == 0x0020;
-
-	def isVet(self): return (self.type&0x003F) == 0x0021;
-	def isMap(self): return (self.type&0x003F) == 0x0022;
-
-	def setNull(self): self.type = 0; return self;
-	def setItem(self): self.type = 0x0010; return self;
-	def setNat (self): self.type = 0x0011; return self;
-	def setStr (self): self.type = 0x0012; return self;
-	def setColl(self): self.type = 0x0020; return self;
-	def setVet (self): self.type = 0x0021; return self;
-	def setMap (self): self.type = 0x0022; return self;
-
-
-	def __str__(self):
-		if self.isNull():
-			return "[Null]"
-		if self.isItem():
-			return "[Item]"
-		if self.isVet():
-			return "[Coll:Vet]"
-		if self.isMap():
-			return "[Coll:Map]"
-		if self.isColl():
-			return "[Coll]"
-		return "[Err]"
+URFC = ctypes.CDLL("./liburfc.so")
+pChar = ctypes.c_char_p
+pVoid = ctypes.c_void_p
+URFC.ctx_idx_clear.restypes = pChar
 
 
 class Ctx:
-	def __init__(self, unit):
-		self.idx = []
-		self.unit = unit
+	def __init__(self):
+		self.ptr = URFC.ctx_new()
 
 	def stat(self):
-		return self.unit.ctx_stat(self)
+		a = URFC.ctx_stat(self.ptr)
+		print(self.ptr)
 
-	def clear(self):
-		raise("aaa")
+	def clearIdx(self):
+		a = URFC.ctx_idx_clear(self.ptr)
+		print(self.ptr)
 
-	def toStr(self):
-		return self.unit.ctx_to_str(self)
+	def log(self):
+		URFC.ctx_log(self.ptr)
 
-	def toInt(self):
-		# unit(idx,)
-		return 0;
-
-	def size(self):
-		return self.unit.ctx_size(self)
-
-	def rawsize(self):
-		return 0;
-
-	def set(self, val):
-		self.unit.ctx_set(self,val)
-
-	def __str__(self):
-		return self.unit.ctx_to_str(self)
-
-	def __getitem__(self, idx):
-		self.idx = idx
-		return self;
+	#def __getitem__(self, idx):
+	#	self.idx = idx
+	#	return self;
 
 	#def __setattr__(self, attr, value):
 	#	print attr,value
 
-	def __setitem__(self, idx, val):
-		self.idx = idx
-		self.unit.ctx_set(self,val)
+	#def __setitem__(self, idx, val):
+	#	self.idx = idx
+	#	self.unit.ctx_set(self,val)
 
 
 class Unit(object):
@@ -195,12 +152,10 @@ class Robot(Unit):
 
 
 
-mapa_unit = MapStd()
-mapa = mapa_unit.ctx()
-print mapa.stat()
-
-
-
+print("opa")
+ctx = Ctx()
+#ctx.clearIdx()
+ctx.log()
 #value.stat()
 
 

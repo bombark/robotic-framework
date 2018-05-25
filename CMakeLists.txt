@@ -13,7 +13,9 @@ link_directories(/opt/ros/kinetic/lib)
 #add_library(drv-yaml SHARED "src/drv-yaml.cpp")
 #target_link_libraries(drv-yaml )
 
+#add_library(urfc SHARED "src/wrapper-c.cpp")
 
-add_executable(teste "src/main4.cpp")
-target_link_libraries(teste pthread yaml-cpp)
+
+add_executable(teste "src/main3.cpp")
+#target_link_libraries(teste pthread yaml-cpp)
 #target_link_libraries(teste roscpp rosconsole roscpp_serialization pthread)
